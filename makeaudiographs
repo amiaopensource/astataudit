@@ -25,7 +25,6 @@ while [[ "${@}" != "" ]] ; do
     shift
 
     #file variables
-    SAMPLE_RATE=$(ffprobe "${FILENAME}" -show_entries stream=sample_rate -of default=nw=1:nk=1)
     DURATION=$(ffprobe "${FILENAME}" -show_entries stream=duration -of default=nw=1:nk=1)
     
     GRAPH_W=6000
@@ -35,14 +34,7 @@ while [[ "${@}" != "" ]] ; do
     AUDIOFORMAT="aresample=${AUDIO_SAMPLE_RATE},aformat=sample_fmts=dbl,asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
     VERTICAL_MARKINGS=$(echo "${GRAPH_W} / 150" | bc)
 
-    TILE_FLOOR=$(echo "scale=6; ( ( ( ${AUDIO_SAMPLE_RATE} * ${DURATION} ) / ${AUDIO_FRAME_SIZE} ) / ${GRAPH_W} )" | bc | perl -nl -MPOSIX -e 'print floor($_);')
-    TILE_MOD=$(echo "       ( ( ( ${AUDIO_SAMPLE_RATE} * ${DURATION} ) / ${AUDIO_FRAME_SIZE} ) % ${GRAPH_W} )" | bc)
-    TILE_CEILING=$(echo "scale=6; ( ( ( ${AUDIO_SAMPLE_RATE} * ${DURATION} ) / ${AUDIO_FRAME_SIZE} ) / ${GRAPH_W} ) " | bc | perl -nl -MPOSIX -e 'print ceil($_);')
-    X_AXIS_MAX=$(echo "scale=6; $DURATION / (( ${TILE_FLOOR} * ${GRAPH_W} + ${TILE_MOD} ) / ( ${TILE_CEILING} * ${GRAPH_W} ))" | bc)
-
     PAD_W="240"
-    PAD=",pad=iw+${PAD_W}:ih:${PAD_W}:0"
-    IMAGE_W=$(echo "${GRAPH_W} + ${PAD_W}" | bc)
 
     unset TIMELINE
     COUNTER=0
@@ -96,11 +88,4 @@ while [[ "${@}" != "" ]] ; do
         [top5G][intAHG][intA1G][intBHG][intB1G][top6G]vstack=27[grat];
         [grat][graph]hstack=2[chart]" \
         -map "[chart]" -vframes 1 ./"${BASENAME}_audio_report2.png"
-    #ffmpeg -nostdin -y -i "$FILENAME" -filter_complex "asplit=4[a][b][c][d];\
-        #[a]showwavespic=split_channels=1:scale=log:s=${GRAPH_W}x240:colors=purple|blue|green|red,drawbox[a1];\
-        #[b]showwavespic=split_channels=1:scale=lin:s=${GRAPH_W}x240:colors=purple|blue|green|red,drawbox[b1];\
-        #[c]showspectrumpic=s=${GRAPH_W}x240:scale=log:legend=false[c1];\
-        #[d]showspectrumpic=s=${GRAPH_W}x240:scale=lin:legend=false[d1];\
-        #[a1][b1][c1][d1]vstack=4[image1]"\
-        #-map "[image1]" -vframes 1 ./"${BASENAME}_audio_report.png"
 done
