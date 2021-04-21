@@ -18,6 +18,17 @@ _check_dependencies(){
     fi
 }
 
+_flat_ffprobe_parse(){
+    FFPROBE_DOC="${1}"
+    KEY="${2}"
+    VALUE="$(grep "^${KEY}=" "${FFPROBE_DOC}" | cut -d "=" -f2- | sed -e 's/^"//' -e 's/"$//')"
+    VALUE_LINE_COUNT="$(echo -n "${VALUE}" | grep -c '^')"
+    if [[ "${VALUE_LINE_COUNT}" > 1 ]] ; then
+        _report -w "The parsed value for '${KEY}' is in ${VALUE_LINE_COUNT} lines, which may be unintended"
+    fi
+    echo "${VALUE}"
+}
+
 _get_iso8601(){
     date +%FT%T
 }
@@ -88,19 +99,20 @@ while [[ "${@}" != "" ]] ; do
     FILENAME="$1"
     BASENAME=$(basename "${FILENAME}")
     FILTER_REPORT="$(_maketemp)"
-    
+    FFPROBE_REPORT="$(_maketemp)"
     shift
 
     ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "silencedetect,astats,loudnorm=print_format=json,agate=attack=0.01:release=0.01:ratio=9000,aphasemeter=r=0.2:video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase:value=-0.18:function=less" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+    ffprobe -i "${FILENAME}" -show_format -show_streams -of flat > "${FFPROBE_REPORT}"
     measured_I=$(cat "${FILTER_REPORT}" | grep "input_i" | awk -F\" '{print $4}')
     measured_LRA=$(cat "${FILTER_REPORT}" | grep "input_lra" | awk -F\" '{print $4}')
     measured_TP=$(cat "${FILTER_REPORT}" | grep "input_tp" | awk -F\" '{print $4}')
     measured_thresh=$(cat "${FILTER_REPORT}" | grep "input_thresh" | awk -F\" '{print $4}')
     target_offset=$(cat "${FILTER_REPORT}" | grep "target_offset" | awk -F\" '{print $4}')
-    DURATION=$(ffprobe "$FILENAME" -show_entries format=duration -of default=nw=1:nk=1 2>/dev/null)
-    SAMPLERATE=$(ffprobe "$FILENAME" -show_entries stream=sample_rate -of default=nw=1:nk=1 2>/dev/null)
-    CHANNELS=$(ffprobe "$FILENAME" -show_entries stream=channels -of default=nw=1:nk=1 2>/dev/null)
-    CODEC=$(ffprobe "$FILENAME" -show_entries stream=codec_name -of default=nw=1:nk=1 2>/dev/null)
+    DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
+    SAMPLERATE=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.0.sample_rate)
+    CHANNELS=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.0.channels)
+    CODEC=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.0.codec_name)
 
     PEAKLEVEL1=$(cat "${FILTER_REPORT}" | grep "Peak level dB:" | tail -n +1 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
     PEAKLEVEL2=$(cat "${FILTER_REPORT}" | grep "Peak level dB:" | tail -n +2 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
