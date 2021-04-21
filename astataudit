@@ -121,7 +121,7 @@ while [[ "${@}" != "" ]] ; do
     bwfmetaedit=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
 
 
-    echo "$(basename "$FILENAME"),$DURATION,$SAMPLERATE,$CHANNELS,$CODEC,$PEAKLEVEL1,$PEAKLEVEL2,$PEAKLEVELDIFF,$BITSCOPE,$DCOFFSET,$FLATFACTOR,$PEAKCOUNT,$bwfmetaedit"
+    echo "${BASENAME},$DURATION,$SAMPLERATE,$CHANNELS,$CODEC,$PEAKLEVEL1,$PEAKLEVEL2,$PEAKLEVELDIFF,$BITSCOPE,$DCOFFSET,$FLATFACTOR,$PEAKCOUNT,$bwfmetaedit"
 
     GRAPH_W=6000
     AUDIO_FRAME_SIZE="$(echo "((${DURATION}*${AUDIO_SAMPLE_RATE})/${GRAPH_W})+1" | bc)"
