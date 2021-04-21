@@ -1,15 +1,12 @@
 #!/bin/bash
 
-echo "Package Name,First Object File Name,Count of Object Files,Count of Image Files,integrated loudness,loudness range,true peak,threshold,\
-target_offset,cuny loudness adjustment,silent ranges,phase issues,interstitial,duration,samplerate,channels,codec,peak level ch1,peak level ch2,peak level diff,bitscope,dcoffset,flatfactor,peakcount,bwfmetaedit"
+echo "First Object File Name,integrated loudness,loudness range,true peak,threshold,\
+target_offset,loudness adjustment,silent ranges,phase issues,interstitial,duration,samplerate,channels,codec,peak level ch1,peak level ch2,peak level diff,bitscope,dcoffset,flatfactor,peakcount,bwfmetaedit"
 while [[ "${@}" != "" ]] ; do
-    PACKAGE="$1"
+    FILENAME="$1"
     shift
-    FILECOUNT=$(find "${PACKAGE}/objects" -maxdepth 2 -type f ! -name .DS_Store | wc -l | sed 's/ //g')
 
-    find "${PACKAGE}/objects" -maxdepth 2 -type f ! -name .DS_Store | while read FILENAME ; do
         ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "silencedetect,astats,loudnorm=print_format=json,agate=attack=0.01:release=0.01:ratio=9000,aphasemeter=r=0.2:video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase:value=-0.18:function=less" -f null - 2>&1 |  tr "\r" "\n" > /tmp/loud
-        image_count=$(find "${PACKAGE}/metadata/depictions" -maxdepth 2 -type f ! -name .DS_Store | wc -l | sed 's/ //g')
         measured_I=$(cat /tmp/loud | grep "input_i" | awk -F\" '{print $4}')
         measured_LRA=$(cat /tmp/loud | grep "input_lra" | awk -F\" '{print $4}')
         measured_TP=$(cat /tmp/loud | grep "input_tp" | awk -F\" '{print $4}')
@@ -41,6 +38,5 @@ while [[ "${@}" != "" ]] ; do
         PHASEERROR=$(grep Parsed_ametadata /tmp/loud | paste - - | sed "s/lavfi.aphasemeter.phase=//g" | cut -d ":" -f 4 | awk '{print $1 "(" $5 ")"}' | xargs)
         INTERSTITIAL=$(ffprobe -f lavfi -i "amovie=${FILENAME},loudnorm=tp=0,astats=metadata=1:reset=1" -show_entries frame=pkt_pts_time:frame_tags=lavfi.astats.Overall.Max_difference -of csv 2>/dev/null | awk -F  "," '$3>=0.07' | awk -F  "," '{print $2 "(" $3 ")"}' | xargs)
 
-        echo "$(basename "$PACKAGE"),$(basename "$FILENAME"),$FILECOUNT,$image_count,$measured_I,$measured_LRA,$measured_TP,$measured_thresh,$target_offset,$LOUD_ADJ,$SILENCE,$PHASEERROR,$INTERSTITIAL,$DURATION,$SAMPLERATE,$CHANNELS,$CODEC,$PEAKLEVEL1,$PEAKLEVEL2,$PEAKLEVELDIFF,$BITSCOPE,$DCOFFSET,$FLATFACTOR,$PEAKCOUNT,$bwfmetaedit"
-    done
+        echo "$(basename "$FILENAME"),$measured_I,$measured_LRA,$measured_TP,$measured_thresh,$target_offset,$LOUD_ADJ,$SILENCE,$PHASEERROR,$INTERSTITIAL,$DURATION,$SAMPLERATE,$CHANNELS,$CODEC,$PEAKLEVEL1,$PEAKLEVEL2,$PEAKLEVELDIFF,$BITSCOPE,$DCOFFSET,$FLATFACTOR,$PEAKCOUNT,$bwfmetaedit"
 done
