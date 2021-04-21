@@ -29,6 +29,22 @@ _flat_ffprobe_parse(){
     echo "${VALUE}"
 }
 
+_astats_parse(){
+    ASTATS_DOC="${1}"
+    SECTION="${2}"
+    KEY="${3}"
+    if [[ "${SECTION}" == "Overall" ]] ; then
+        VALUE="$(sed '1,/Overall$/d' "${ASTATS_DOC}" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
+    else
+        VALUE="$(sed -n "s/Overall$/Channel: X/g;/Channel: ${SECTION}/,/Channel/p" "${ASTATS_DOC}" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
+    fi
+    VALUE_LINE_COUNT="$(echo -n "${VALUE}" | grep -c '^')"
+    if [[ "${VALUE_LINE_COUNT}" > 1 ]] ; then
+        _report -w "The parsed value for '${KEY}' is in ${VALUE_LINE_COUNT} lines, which may be unintended"
+    fi
+    echo "${VALUE}"
+}
+
 _get_iso8601(){
     date +%FT%T
 }
@@ -108,15 +124,13 @@ while [[ "${@}" != "" ]] ; do
     SAMPLERATE=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.0.sample_rate)
     CHANNELS=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.0.channels)
     CODEC=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.0.codec_name)
-
-    PEAKLEVEL1=$(cat "${FILTER_REPORT}" | grep "Peak level dB:" | tail -n +1 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
-    PEAKLEVEL2=$(cat "${FILTER_REPORT}" | grep "Peak level dB:" | tail -n +2 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
+    PEAKLEVEL1=$(_astats_parse "${FILTER_REPORT}" 1 "Peak level dB")
+    PEAKLEVEL2=$(_astats_parse "${FILTER_REPORT}" 2 "Peak level dB")
     PEAKLEVELDIFF=$(echo "scale=3; $PEAKLEVEL1 - $PEAKLEVEL2" | bc)
-
-    BITSCOPE=$(cat "${FILTER_REPORT}" | grep "Bit depth: " | tail -n +3 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
-    DCOFFSET=$(cat "${FILTER_REPORT}" | grep "DC offset: " | tail -n +3 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
-    FLATFACTOR=$(cat "${FILTER_REPORT}" | grep "Flat factor: " | tail -n +3 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
-    PEAKCOUNT=$(cat "${FILTER_REPORT}" | grep "Peak count: " | tail -n +3 | head -n 1 | cut -d ":" -f 2 | sed 's/ //g')
+    BITSCOPE=$(_astats_parse "${FILTER_REPORT}" Overall "Bit depth")
+    DCOFFSET=$(_astats_parse "${FILTER_REPORT}" Overall "DC offset")
+    FLATFACTOR=$(_astats_parse "${FILTER_REPORT}" Overall "Flat factor")
+    PEAKCOUNT=$(_astats_parse "${FILTER_REPORT}" Overall "Peak count")
 
     bwfmetaedit=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
 
