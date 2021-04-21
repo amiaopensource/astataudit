@@ -83,7 +83,7 @@ HORIZONTAL_MARKINGS_240="drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:height=i
 HORIZONTAL_MARKINGS_120="drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:height=ih/8,drawgrid=thickness=1:color=${BORDER_COLOR}@0.5:height=ih/4,drawgrid=thickness=1:color=${BORDER_COLOR}@0.8:height=ih/2"
 
 echo "First Object File Name,integrated loudness,loudness range,true peak,threshold,\
-target_offset,loudness adjustment,silent ranges,phase issues,interstitial,duration,samplerate,channels,codec,peak level ch1,peak level ch2,peak level diff,bitscope,dcoffset,flatfactor,peakcount,bwfmetaedit"
+target_offset,loudness adjustment,silent ranges,phase issues,duration,samplerate,channels,codec,peak level ch1,peak level ch2,peak level diff,bitscope,dcoffset,flatfactor,peakcount,bwfmetaedit"
 while [[ "${@}" != "" ]] ; do
     FILENAME="$1"
     BASENAME=$(basename "${FILENAME}")
@@ -121,9 +121,8 @@ while [[ "${@}" != "" ]] ; do
     done)
 
     PHASEERROR=$(grep Parsed_ametadata "${FILTER_REPORT}" | paste - - | sed "s/lavfi.aphasemeter.phase=//g" | cut -d ":" -f 4 | awk '{print $1 "(" $5 ")"}' | xargs)
-    INTERSTITIAL=$(ffprobe -f lavfi -i "amovie=${FILENAME},loudnorm=tp=0,astats=metadata=1:reset=1" -show_entries frame=pkt_pts_time:frame_tags=lavfi.astats.Overall.Max_difference -of csv 2>/dev/null | awk -F  "," '$3>=0.07' | awk -F  "," '{print $2 "(" $3 ")"}' | xargs)
 
-    echo "$(basename "$FILENAME"),$measured_I,$measured_LRA,$measured_TP,$measured_thresh,$target_offset,$LOUD_ADJ,$SILENCE,$PHASEERROR,$INTERSTITIAL,$DURATION,$SAMPLERATE,$CHANNELS,$CODEC,$PEAKLEVEL1,$PEAKLEVEL2,$PEAKLEVELDIFF,$BITSCOPE,$DCOFFSET,$FLATFACTOR,$PEAKCOUNT,$bwfmetaedit"
+    echo "$(basename "$FILENAME"),$measured_I,$measured_LRA,$measured_TP,$measured_thresh,$target_offset,$LOUD_ADJ,$SILENCE,$PHASEERROR,$DURATION,$SAMPLERATE,$CHANNELS,$CODEC,$PEAKLEVEL1,$PEAKLEVEL2,$PEAKLEVELDIFF,$BITSCOPE,$DCOFFSET,$FLATFACTOR,$PEAKCOUNT,$bwfmetaedit"
 
     #file variables
     DURATION=$(ffprobe "${FILENAME}" -show_entries stream=duration -of default=nw=1:nk=1)
