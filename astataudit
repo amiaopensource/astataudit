@@ -189,7 +189,7 @@ while [[ "${@}" != "" ]] ; do
         TIMELINE+=",drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:text='${MARK_TIME}':x=${MARK_X}-text_w:y=(${HEADER_HEIGHT}-${TIMELINE_FONTSIZE})/2"
     done
 
-    ffmpeg -nostdin -y -i "$FILENAME" -filter_complex "asplit=10[e][f][g][h][i][j][k][l][m][n];\
+    GRAPH_FILTER="asplit=10[e][f][g][h][i][j][k][l][m][n];\
         `#timeline`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT}${TIMELINE},split=6[top1][top2][top3][top4][top5][top6];\
         color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size\: ${AUDIO_FRAME_SIZE}'[Header];\
         `#int_loudnorm`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Interstitial (with loudnorm) -1...1. Differences in readings from sample to sample. May indicate dropped samples.'[intAH];\
@@ -229,7 +229,9 @@ while [[ "${@}" != "" ]] ; do
         [top3G][nullminmaxHG][nullminmax1G][diffHG][diff1G]\
         [top4G][dcoffHG][dcoff1G]\
         [top5G][intAHG][intA1G][intBHG][intB1G][top6G]vstack=27[grat];
-        [grat][graph]hstack=2[chart]" \
+        [grat][graph]hstack=2[chart]"
+
+    ffmpeg -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
         -map "[chart]" -vframes 1 ./"${BASENAME}_audio_report2.png"
     ((FILE_NUMBER++))
 done
