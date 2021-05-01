@@ -141,8 +141,14 @@ _get_metadata(){
     FILENAME="${1}"
     BASENAME=$(basename "${FILENAME}")
     FILTER_REPORT="$(_maketemp)"
+    FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
     ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+    {
+        echo "<astats>"
+        grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
+        echo "</astats>"
+    } > "${FILTER_REPORT_XMLD}"
     ffprobe -i "${FILENAME}" -show_format -show_streams -of flat > "${FFPROBE_REPORT}"
     BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
 }
@@ -329,9 +335,10 @@ _make_graph(){
 _process_file(){
     FILENAME="$1"
     unset CSV_ROW
+    FILTER_TMP_XMLD="$(_maketemp)"
     IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILENAME}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
     if [[ "${IS_AUDIO}" = "audio" ]] ; then
-        _get_metadata "${FILENAME}"
+        _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
         _get_csv_row "${FILENAME}"
         # express csv row (with header if on first row)
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
