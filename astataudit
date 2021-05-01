@@ -361,6 +361,21 @@ _make_graph(){
         -map "[chart]" -vframes 1 ./"${BASENAME}_audio_report2.png"
 }
 
+_process_file(){
+    FILENAME="$1"
+    unset CSV_ROW
+    _get_metadata "${FILENAME}"
+    _get_csv_row "${FILENAME}"
+    # express csv row (with header if on first row)
+    if [[ "${FILE_NUMBER}" = "0" ]] ; then
+        echo "${CSV_HEADER}" | sed 's/.$//'
+    fi
+    echo "${CSV_ROW}" | sed 's/.$//'
+    # variables to keep
+    DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
+    _make_graph "${FILENAME}"
+}
+
 _check_dependencies bwfmetaedit ffmpeg ffprobe
 _find_a_font
 
@@ -370,21 +385,7 @@ CSV_ROW=""
 while [[ "${@}" != "" ]] ; do
     FILENAME="$1"
     BASENAME=$(basename "${FILENAME}")
-    unset CSV_ROW
     shift
-
-    _get_metadata "${FILENAME}"
-    _get_csv_row "${FILENAME}"
-
-    # variables to keep
-    DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
-
-    # express csv row (with header if on first row)
-    if [[ "${FILE_NUMBER}" = "0" ]] ; then
-        echo "${CSV_HEADER}" | sed 's/.$//'
-    fi
-    echo "${CSV_ROW}" | sed 's/.$//'
-
-    _make_graph "${FILENAME}"
+    _process_file "${FILENAME}"
     ((FILE_NUMBER++))
 done
