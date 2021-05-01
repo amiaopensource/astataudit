@@ -121,6 +121,16 @@ _ss_to_hhmmss(){
     printf "%02d\:%02d\:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
 }
 
+_get_metadata(){
+    FILENAME="${1}"
+    BASENAME=$(basename "${FILENAME}")
+    FILTER_REPORT="$(_maketemp)"
+    FFPROBE_REPORT="$(_maketemp)"
+    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+    ffprobe -i "${FILENAME}" -show_format -show_streams -of flat > "${FFPROBE_REPORT}"
+    BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
+}
+
 _check_dependencies bwfmetaedit ffmpeg ffprobe
 
 # image settings
@@ -140,14 +150,10 @@ CSV_ROW=""
 while [[ "${@}" != "" ]] ; do
     FILENAME="$1"
     BASENAME=$(basename "${FILENAME}")
-    FILTER_REPORT="$(_maketemp)"
-    FFPROBE_REPORT="$(_maketemp)"
     unset CSV_ROW
     shift
 
-    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
-    ffprobe -i "${FILENAME}" -show_format -show_streams -of flat > "${FFPROBE_REPORT}"
-    bwfmetaedit=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
+    _get_metadata "${FILENAME}"
 
     _add_column astats  1       "Bit depth"
     _add_column astats  2       "Bit depth"
@@ -211,7 +217,7 @@ while [[ "${@}" != "" ]] ; do
     _add_column astats  2       "Zero crossings"
     _add_column astats  1       "Zero crossings rate"
     _add_column astats  2       "Zero crossings rate"
-    _add_column local   ""      bwfmetaedit "${bwfmetaedit}"
+    _add_column local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
 
     # variables to keep
     DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
