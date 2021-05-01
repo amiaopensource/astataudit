@@ -266,6 +266,7 @@ _get_csv_row(){
 _make_graph(){
     FILENAME="${1}"
     BASENAME=$(basename "${FILENAME}")
+    OUTPUT_GRAPH="${1}.astatsaudit.png"
     # image settings
     AUDIO_SAMPLE_RATE=48000
     HEADER_HEIGHT=24
@@ -359,8 +360,8 @@ _make_graph(){
         [top3G][dcoffHG][dcoff1G][crestHG][crest1G]
         [top4G]vstack=17[grat];
         [grat][graph]hstack=2[chart]"
-        -map "[chart]" -vframes 1 ./"${BASENAME}_audio_report2.png"
     ffmpeg "${FFMPEG_VERBOSE[@]}" -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
+        -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
 }
 
 _process_file(){
