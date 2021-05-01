@@ -147,6 +147,85 @@ _get_metadata(){
     BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
 }
 
+_get_csv_row(){
+    # this function expects to process the following variables:
+    # FILTER_REPORT, FFPROBE_REPORT, BWFMETAEDIT_REPORT
+    unset CSV_ROW
+
+    # the following _add_column functions use the following arguments
+    # 1: 'astats to read from FILTER_REPORT
+    #    'ffprobe' to read from FFPROBE_REPORT
+    #    'local' to print local key/value pairs
+    # 2: if $1=astats the $2 is the channel number or 'Overall'
+    #    if $2=ffprobe then $2 is the section: format or streams
+    #    if $1=local then $2 is unused
+    # 3: the value or variable to parse from the referenced report
+    # 4: if $1=local then this is the value for the $3 variable
+    _add_column astats  1       "Bit depth"
+    _add_column astats  2       "Bit depth"
+    _add_column astats  Overall "Bit depth"
+    _add_column ffprobe streams stream.0.channels
+    _add_column ffprobe streams stream.0.codec_name
+    _add_column astats  1       "Crest factor"
+    _add_column astats  2       "Crest factor"
+    _add_column astats  1       "DC offset"
+    _add_column astats  2       "DC offset"
+    _add_column astats  Overall "DC offset"
+    _add_column ffprobe format  duration
+    _add_column astats  1       "Dynamic range"
+    _add_column astats  2       "Dynamic range"
+    _add_column local   ""      filename "${BASENAME}"
+    _add_column astats  1       "Flat factor"
+    _add_column astats  2       "Flat factor"
+    _add_column astats  Overall "Flat factor"
+    _add_column astats  1       "Max difference"
+    _add_column astats  2       "Max difference"
+    _add_column astats  Overall "Max difference"
+    _add_column astats  1       "Max level"
+    _add_column astats  2       "Max level"
+    _add_column astats  Overall "Max level"
+    _add_column astats  1       "Mean difference"
+    _add_column astats  2       "Mean difference"
+    _add_column astats  Overall "Mean difference"
+    _add_column astats  1       "Min difference"
+    _add_column astats  2       "Min difference"
+    _add_column astats  Overall "Min difference"
+    _add_column astats  1       "Min level"
+    _add_column astats  2       "Min level"
+    _add_column astats  Overall "Min level"
+    _add_column astats  1       "Noise floor dB"
+    _add_column astats  2       "Noise floor dB"
+    _add_column astats  Overall "Noise floor dB"
+    _add_column astats  1       "Noise floor count"
+    _add_column astats  2       "Noise floor count"
+    _add_column astats  Overall "Noise floor count"
+    _add_column astats  Overall "Number of samples"
+    _add_column astats  1       "Peak count"
+    _add_column astats  2       "Peak count"
+    _add_column astats  Overall "Peak count"
+    _add_column astats  1       "Peak level dB"
+    _add_column astats  2       "Peak level dB"
+    _add_column astats  Overall "Peak level dB"
+    _add_column astats  1       "RMS difference"
+    _add_column astats  2       "RMS difference"
+    _add_column astats  Overall "RMS difference"
+    _add_column astats  1       "RMS level dB"
+    _add_column astats  2       "RMS level dB"
+    _add_column astats  Overall "RMS level dB"
+    _add_column astats  1       "RMS peak dB"
+    _add_column astats  2       "RMS peak dB"
+    _add_column astats  Overall "RMS peak dB"
+    _add_column astats  1       "RMS trough dB"
+    _add_column astats  2       "RMS trough dB"
+    _add_column astats  Overall "RMS trough dB"
+    _add_column ffprobe streams stream.0.sample_rate
+    _add_column astats  1       "Zero crossings"
+    _add_column astats  2       "Zero crossings"
+    _add_column astats  1       "Zero crossings rate"
+    _add_column astats  2       "Zero crossings rate"
+    _add_column local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
+}
+
 _make_graph(){
     FILENAME="${1}"
     BASENAME=$(basename "${FILENAME}")
@@ -295,70 +374,7 @@ while [[ "${@}" != "" ]] ; do
     shift
 
     _get_metadata "${FILENAME}"
-
-    _add_column astats  1       "Bit depth"
-    _add_column astats  2       "Bit depth"
-    _add_column astats  Overall "Bit depth"
-    _add_column ffprobe streams stream.0.channels
-    _add_column ffprobe streams stream.0.codec_name
-    _add_column astats  1       "Crest factor"
-    _add_column astats  2       "Crest factor"
-    _add_column astats  1       "DC offset"
-    _add_column astats  2       "DC offset"
-    _add_column astats  Overall "DC offset"
-    _add_column ffprobe format  duration
-    _add_column astats  1       "Dynamic range"
-    _add_column astats  2       "Dynamic range"
-    _add_column local   ""      filename "${BASENAME}"
-    _add_column astats  1       "Flat factor"
-    _add_column astats  2       "Flat factor"
-    _add_column astats  Overall "Flat factor"
-    _add_column astats  1       "Max difference"
-    _add_column astats  2       "Max difference"
-    _add_column astats  Overall "Max difference"
-    _add_column astats  1       "Max level"
-    _add_column astats  2       "Max level"
-    _add_column astats  Overall "Max level"
-    _add_column astats  1       "Mean difference"
-    _add_column astats  2       "Mean difference"
-    _add_column astats  Overall "Mean difference"
-    _add_column astats  1       "Min difference"
-    _add_column astats  2       "Min difference"
-    _add_column astats  Overall "Min difference"
-    _add_column astats  1       "Min level"
-    _add_column astats  2       "Min level"
-    _add_column astats  Overall "Min level"
-    _add_column astats  1       "Noise floor dB"
-    _add_column astats  2       "Noise floor dB"
-    _add_column astats  Overall "Noise floor dB"
-    _add_column astats  1       "Noise floor count"
-    _add_column astats  2       "Noise floor count"
-    _add_column astats  Overall "Noise floor count"
-    _add_column astats  Overall "Number of samples"
-    _add_column astats  1       "Peak count"
-    _add_column astats  2       "Peak count"
-    _add_column astats  Overall "Peak count"
-    _add_column astats  1       "Peak level dB"
-    _add_column astats  2       "Peak level dB"
-    _add_column astats  Overall "Peak level dB"
-    _add_column astats  1       "RMS difference"
-    _add_column astats  2       "RMS difference"
-    _add_column astats  Overall "RMS difference"
-    _add_column astats  1       "RMS level dB"
-    _add_column astats  2       "RMS level dB"
-    _add_column astats  Overall "RMS level dB"
-    _add_column astats  1       "RMS peak dB"
-    _add_column astats  2       "RMS peak dB"
-    _add_column astats  Overall "RMS peak dB"
-    _add_column astats  1       "RMS trough dB"
-    _add_column astats  2       "RMS trough dB"
-    _add_column astats  Overall "RMS trough dB"
-    _add_column ffprobe streams stream.0.sample_rate
-    _add_column astats  1       "Zero crossings"
-    _add_column astats  2       "Zero crossings"
-    _add_column astats  1       "Zero crossings rate"
-    _add_column astats  2       "Zero crossings rate"
-    _add_column local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
+    _get_csv_row "${FILENAME}"
 
     # variables to keep
     DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
