@@ -59,6 +59,31 @@ _find_a_font(){
     fi
 }
 
+_finish_xml(){
+    INVENTORY_XML="${1}"
+    xml select \
+        -N "rdf=http://www.w3.org/1999/02/22-rdf-syntax-ns#" \
+        -N "asa=https://github.com/amiaopensource/astatsaudit" \
+        -N "ffprobe=http://www.ffmpeg.org/schema/ffprobe" \
+        -N "astats=https://ffmpeg.org/ffmpeg-filters.html#astats" \
+        -N "bwfme=https://mediaarea.net/BWFMetaEdit" \
+        -t \
+            --elem "rdf:RDF" \
+            --match "//f" \
+            --elem "rdf:Description" \
+                --attr "rdf:about" -v "." -b \
+            --elem "asa:stats" \
+                --elem "asa:dateTime" -v "date:date-time()" -b \
+            -b \
+            --elem "ffprobe:report" \
+                  --attr "settings" -o "$(echo ${FFPROBE_CMD[@]})" -b \
+                  --copy-of "document(@ff)/*" -b \
+            --elem "astats:report" --copy-of "document(@astats)/astats/text()" -b \
+            --elem "bwfme:fullReport" \
+                  --copy-of "document(@bwf)/*" \
+        "${INVENTORY_XML}" | xml fo
+}
+
 _flat_ffprobe_parse(){
     FFPROBE_DOC="${1}"
     KEY="${2}"
@@ -340,6 +365,14 @@ _process_file(){
     if [[ "${IS_AUDIO}" = "audio" ]] ; then
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
         _get_csv_row "${FILENAME}"
+        # gather xml data
+        FFMPEG_TMP="${FILES_XML_TMP}.ff.${FILE_NUMBER}.xml"
+        BWFME_TMP="${FILES_XML_TMP}.bwf.${FILE_NUMBER}.xml"
+        echo "<f ff=\"${FFMPEG_TMP}\" bwf=\"${BWFME_TMP}\" astats=\"${FILTER_TMP_XMLD}\">$(echo "${FILENAME}" | sed 's/.*\/\|.*\///g')</f>" >> "${FILES_XML_TMP}"
+        FFPROBE_CMD=(ffprobe -v 0 "${FILENAME}" "${FFPROBE_SETTINGS[@]}")
+        "${FFPROBE_CMD[@]}" > "${FFMPEG_TMP}"
+        BWFME_CMD=(bwfmetaedit --out-core-xml="${BWFME_TMP}" "${FILENAME}")
+        "${BWFME_CMD[@]}"
         # express csv row (with header if on first row)
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
             echo "${CSV_HEADER}" | sed 's/.$//'
@@ -361,16 +394,25 @@ CSV_HEADER=""
 CSV_ROW=""
 
 INPUT="$1"
+FFPROBE_SETTINGS=(-of xml=x=1:q=1 -noprivate -show_format -show_streams)
 if [[ -f "${INPUT}" ]] ; then
     while [[ "${@}" != "" ]] ; do
         INPUT="$1"
+        FILES_XML_TMP="$(_maketemp)"
+        OUTPUT_XML="${INPUT}.astatsaudit.xml"
         _process_file "${INPUT}"
+        _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
         ((FILE_NUMBER++))
         shift
     done
 elif [[ -d "${INPUT}" ]] ; then
+    FILES_XML_TMP="$(_maketemp)"
+    OUTPUT_XML="${INPUT}/astatsaudit.xml"
+    echo "<files>" > "${FILES_XML_TMP}"
     while read FILE ; do
         _process_file "${FILE}"
         ((FILE_NUMBER++))
     done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
+    echo "</files>" >> "${FILES_XML_TMP}"
+    _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
 fi
