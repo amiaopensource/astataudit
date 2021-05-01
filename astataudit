@@ -267,7 +267,7 @@ _get_csv_row(){
 _make_astats_csv_body(){
     FILENAME="${1}"
     ASTATS_CSV="${2}"
-    ffprobe -f lavfi -i "amovie=${FILENAME},astats=metadata=1:reset=1" -show_frames -of csv >> "${ASTATS_CSV}"
+    ffprobe -v 0 -f lavfi -i "amovie=${FILENAME},astats=metadata=1:reset=1" -show_frames -of csv >> "${ASTATS_CSV}"
 }
 
 _make_astats_csv(){
@@ -404,7 +404,7 @@ _process_file(){
         FFPROBE_CMD=(ffprobe -v 0 "${FILENAME}" "${FFPROBE_SETTINGS[@]}")
         "${FFPROBE_CMD[@]}" > "${FFMPEG_TMP}"
         BWFME_CMD=(bwfmetaedit --out-core-xml="${BWFME_TMP}" "${FILENAME}")
-        "${BWFME_CMD[@]}"
+        "${BWFME_CMD[@]}" 2>/dev/null
         # express csv row (with header if on first row)
         _report -d "    Adding metadata to the file summary csv"
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
