@@ -1,5 +1,7 @@
 #!/bin/bash
 
+FFMPEG_VERBOSE=(-v 0)
+
 _add_column(){
     REPORT_SOURCE="${1}"
     SECTION="${2}"
@@ -178,7 +180,7 @@ _get_metadata(){
         grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
         echo "</astats>"
     } > "${FILTER_REPORT_XMLD}"
-    ffprobe -i "${FILENAME}" -show_format -show_streams -of flat > "${FFPROBE_REPORT}"
+    ffprobe -i "${FILENAME}" -show_format -show_streams -of flat 2> /dev/null > "${FFPROBE_REPORT}"
     BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
 }
 
@@ -357,8 +359,8 @@ _make_graph(){
         [top3G][dcoffHG][dcoff1G][crestHG][crest1G]
         [top4G]vstack=17[grat];
         [grat][graph]hstack=2[chart]"
-    ffmpeg -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
         -map "[chart]" -vframes 1 ./"${BASENAME}_audio_report2.png"
+    ffmpeg "${FFMPEG_VERBOSE[@]}" -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
 }
 
 _process_file(){
