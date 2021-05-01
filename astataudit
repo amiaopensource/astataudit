@@ -267,15 +267,15 @@ _make_graph(){
         `#crest`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Crest Factor 0...10. Ratio of peak to RMS level (not in dB). Blue=channel 1, pink=channel 2.`#High levels may indicate prior compression`'[crestH];
         [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=5[astats1][astats2][astats3][astats4][astats5];
             [astats1]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Peak_level:fg1=0xFF00FFFF:
-                m2=lavfi.astats.1.RMS_level:fg2=0xFF800080:
+                m1=lavfi.astats.1.Peak_level:fg1=0xFFFF0000:
+                m2=lavfi.astats.1.RMS_level:fg2=0xFF00FFFF:
                 max=0:min=-70:
                 slide=picture:
                 mode=line:
                 s=${GRAPH_W}x240,${HORIZONTAL_MARKINGS_240}[peakL1];
             [astats2]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.2.Peak_level:fg1=0xFF00FFFF:
-                m2=lavfi.astats.2.RMS_level:fg2=0xFF800080:
+                m1=lavfi.astats.2.Peak_level:fg1=0xFFFF00FF:
+                m2=lavfi.astats.2.RMS_level:fg2=0xFF00FFFF:
                 max=0:min=-70:
                 slide=picture:
                 mode=line:
