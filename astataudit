@@ -366,16 +366,16 @@ _process_file(){
     unset CSV_ROW
     IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILENAME}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
     if [[ "${IS_AUDIO}" = "audio" ]] ; then
-    _get_metadata "${FILENAME}"
-    _get_csv_row "${FILENAME}"
-    # express csv row (with header if on first row)
-    if [[ "${FILE_NUMBER}" = "0" ]] ; then
-        echo "${CSV_HEADER}" | sed 's/.$//'
-    fi
-    echo "${CSV_ROW}" | sed 's/.$//'
-    # variables to keep
-    DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
-    _make_graph "${FILENAME}"
+        _get_metadata "${FILENAME}"
+        _get_csv_row "${FILENAME}"
+        # express csv row (with header if on first row)
+        if [[ "${FILE_NUMBER}" = "0" ]] ; then
+            echo "${CSV_HEADER}" | sed 's/.$//'
+        fi
+        echo "${CSV_ROW}" | sed 's/.$//'
+        # variables to keep
+        DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
+        _make_graph "${FILENAME}"
     else
         _report -d "Skipping ${FILENAME}. (no audio stream found)"
     fi
