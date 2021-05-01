@@ -38,7 +38,7 @@ _check_dependencies(){
     done
     if [[ "${DEPS_OK}" = "NO" ]]; then
         _report -wt "Unmet dependencies"
-        _report -wt "Aborting!"
+        _report -wt "Stopping!"
         exit 1
     else
         return 0
@@ -272,15 +272,16 @@ _make_astats_csv_body(){
 
 _make_astats_csv(){
     FILENAME="${1}"
+    BASENAME="$(basename "${FILENAME}")"
     ASTATS_CSV="${1}.astats.csv"
     DURATION="${2}"
     DURATION_LITTLE_LESS="$(echo "${DURATION}" - 0.1 | bc -l)"
     if [[ ! -f "${ASTATS_CSV}" ]] ; then
-        _report -d "Making astats csv for ${FILENAME}..."
+        _report -d "    Making astats csv for ${BASENAME}"
         ffprobe -f lavfi -i "amovie=${FILENAME}:sp=${DURATION_LITTLE_LESS},astats=metadata=1:reset=1" -show_frames -of csv=nk=0 2>/dev/null | tail -n 1 | sed 's/=[^,]*//g' > "${ASTATS_CSV}"
         _make_astats_csv_body "${FILENAME}" "${ASTATS_CSV}"
     else
-        _report -d "Astats csv for ${FILENAME} already exists, skipping."
+        _report -d "    Astats csv for ${BASENAME} already exists, skipping."
     fi
 }
 
@@ -288,7 +289,7 @@ _make_graph(){
     FILENAME="${1}"
     BASENAME=$(basename "${FILENAME}")
     OUTPUT_GRAPH="${1}.astatsaudit.png"
-    _report -d "Generating a graph at ${OUTPUT_GRAPH}"
+    _report -d "    Generating a graph at ${OUTPUT_GRAPH}"
     # image settings
     AUDIO_SAMPLE_RATE=48000
     HEADER_HEIGHT=24
@@ -388,10 +389,12 @@ _make_graph(){
 
 _process_file(){
     FILENAME="$1"
+    BASENAME="$(basename "${FILENAME}")"
     unset CSV_ROW
     FILTER_TMP_XMLD="$(_maketemp)"
     IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILENAME}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
     if [[ "${IS_AUDIO}" = "audio" ]] ; then
+        _report -d "Processing: ${BASENAME}"
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
         _get_csv_row "${FILENAME}"
         # gather xml data
@@ -403,6 +406,7 @@ _process_file(){
         BWFME_CMD=(bwfmetaedit --out-core-xml="${BWFME_TMP}" "${FILENAME}")
         "${BWFME_CMD[@]}"
         # express csv row (with header if on first row)
+        _report -d "    Adding metadata to the file summary csv"
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
             echo "${CSV_HEADER}" | sed 's/.$//' > "${OUTPUT_CSV}"
         fi
@@ -412,7 +416,7 @@ _process_file(){
         _make_graph "${FILENAME}"
         _make_astats_csv "${FILENAME}" "${DURATION}"
     else
-        _report -d "Skipping ${FILENAME}. (no audio stream found)"
+        _report -d "Skipping: ${FILENAME} (no audio stream found)"
     fi
 }
 
@@ -427,6 +431,7 @@ INPUT="$1"
 FFPROBE_SETTINGS=(-of xml=x=1:q=1 -noprivate -show_format -show_streams -show_chapters)
 NOW="$(_get_iso8601_c)"
 if [[ -f "${INPUT}" ]] ; then
+    _report -d "${THIS_NAME} will process this list of files: ${@}"
     OUTPUT_CSV="astatsaudit_${NOW}.csv"
     while [[ "${@}" != "" ]] ; do
         INPUT="$1"
@@ -438,6 +443,7 @@ if [[ -f "${INPUT}" ]] ; then
         shift
     done
 elif [[ -d "${INPUT}" ]] ; then
+    _report -d "${THIS_NAME} will process audio files in: ${INPUT}"
     FILES_XML_TMP="$(_maketemp)"
     OUTPUT_XML="${INPUT}/astatsaudit.xml"
     OUTPUT_CSV="${INPUT}/astatsaudit.csv"
