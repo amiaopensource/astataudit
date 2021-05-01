@@ -271,14 +271,14 @@ _make_graph(){
                 m2=lavfi.astats.1.RMS_level:fg2=0xFF800080:
                 max=0:min=-70:
                 slide=picture:
-                mode=bar:
+                mode=line:
                 s=${GRAPH_W}x240,${HORIZONTAL_MARKINGS_240}[peakL1];
             [astats2]adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.astats.2.Peak_level:fg1=0xFF00FFFF:
                 m2=lavfi.astats.2.RMS_level:fg2=0xFF800080:
                 max=0:min=-70:
                 slide=picture:
-                mode=bar:
+                mode=line:
                 s=${GRAPH_W}x240,${HORIZONTAL_MARKINGS_240}[peakR1];
             [astats3]adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.astats.1.Max_level:fg1=0xFFFF00FF:
