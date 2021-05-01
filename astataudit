@@ -363,6 +363,7 @@ CSV_ROW=""
 INPUT="$1"
 if [[ -f "${INPUT}" ]] ; then
     while [[ "${@}" != "" ]] ; do
+        INPUT="$1"
         _process_file "${INPUT}"
         ((FILE_NUMBER++))
         shift
