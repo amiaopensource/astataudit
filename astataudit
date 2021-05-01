@@ -461,7 +461,6 @@ _process_file(){
         _report -d "Processing: ${BASENAME}"
         if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
-        _get_csv_row "${FILENAME}"
         fi
         if [[ "${XML_OUTPUT}" = "y" ]] ; then
         # gather xml data
@@ -476,6 +475,7 @@ _process_file(){
         if [[ "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
         # express csv row (with header if on first row)
         _report -d "    Adding metadata to the file summary csv"
+        _get_csv_row "${FILENAME}"
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
             echo "${CSV_HEADER}" | sed 's/.$//' > "${OUTPUT_CSV}"
         fi
