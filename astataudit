@@ -1,6 +1,70 @@
 #!/bin/bash
+THIS_NAME="$(basename "${0}")"
 
-FFMPEG_VERBOSE=(-v 0)
+_usage(){
+    cat <<EOF
+${THIS_NAME}
+
+Provide visual and information reporting on audio files.
+Usage:
+    ${THIS_NAME} [options] file1.wav [file2.wav ...]
+    or
+    ${THIS_NAME} [options] directory/
+
+The input can be a list of files or a directory of audio files. If the input is
+a directory, then ${THIS_NAME} will review all audio files immediately within
+that directory.
+
+Options:
+    By analyzing audio files, ${THIS_NAME} will provide the following outputs.
+    - A csv of metadata from the ffmpeg astats filter, stream metadata, and
+      bwfmetaedit (one csv for all file inputs)
+    - A csv of astats metadata per audio frame  (one csv for each file input)
+    - An xml of metadata from ffprobe, the astats filter, and bwfmetaedit (one
+      xml for all file inputs)
+    - A png graph that visualizes data from the astats and phasemeter filters
+      (one png for each file input)
+
+ -h        (Show this message)
+ -v        (Provide verbose output)
+
+ -c (y|n)  (Enable file summary csv output, default 'y')
+ -f (y|n)  (Enable audio frame astats csv output, default 'y')
+ -x (y|n)  (Enable xml output, default 'y')
+ -g (y|n)  (Enable graph output, default 'y')
+
+EOF
+}
+
+if [ "${#}" = 0 ] ; then
+    _usage
+    exit 0
+fi
+
+OPTIND=1
+CSV_SUMMARY_OUTPUT="y"
+CSV_FRAMES_OUTPUT="y"
+XML_OUTPUT="y"
+GRAPH_OUTPUT="y"
+while getopts "hvc:f:x:g:" opt ; do
+    case "${opt}" in
+        h) _usage ; exit ;;
+        v) VERBOSE=true ;;
+        c) CSV_SUMMARY_OUTPUT="${OPTARG}" ;;
+        f) CSV_FRAMES_OUTPUT="${OPTARG}" ;;
+        x) XML_OUTPUT="${OPTARG}" ;;
+        g) GRAPH_OUTPUT="${OPTARG}" ;;
+        *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+        :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+    esac
+done
+shift "$((OPTIND-1))"
+
+if [[ "$VERBOSE" == "true" ]] ; then
+    :
+else
+    FFMPEG_VERBOSE=(-v 0)
+fi
 
 _add_column(){
     REPORT_SOURCE="${1}"
@@ -395,8 +459,11 @@ _process_file(){
     IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILENAME}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
     if [[ "${IS_AUDIO}" = "audio" ]] ; then
         _report -d "Processing: ${BASENAME}"
+        if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
         _get_csv_row "${FILENAME}"
+        fi
+        if [[ "${XML_OUTPUT}" = "y" ]] ; then
         # gather xml data
         FFMPEG_TMP="${FILES_XML_TMP}.ff.${FILE_NUMBER}.xml"
         BWFME_TMP="${FILES_XML_TMP}.bwf.${FILE_NUMBER}.xml"
@@ -405,16 +472,23 @@ _process_file(){
         "${FFPROBE_CMD[@]}" > "${FFMPEG_TMP}"
         BWFME_CMD=(bwfmetaedit --out-core-xml="${BWFME_TMP}" "${FILENAME}")
         "${BWFME_CMD[@]}" 2>/dev/null
+        fi
+        if [[ "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
         # express csv row (with header if on first row)
         _report -d "    Adding metadata to the file summary csv"
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
             echo "${CSV_HEADER}" | sed 's/.$//' > "${OUTPUT_CSV}"
         fi
         echo "${CSV_ROW}" | sed 's/.$//' >> "${OUTPUT_CSV}"
+        fi
+        if [[ "${GRAPH_OUTPUT}" = "y" ]] ; then
         # variables to keep
         DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
         _make_graph "${FILENAME}"
+        fi
+        if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
         _make_astats_csv "${FILENAME}" "${DURATION}"
+        fi
     else
         _report -d "Skipping: ${FILENAME} (no audio stream found)"
     fi
@@ -453,5 +527,7 @@ elif [[ -d "${INPUT}" ]] ; then
         ((FILE_NUMBER++))
     done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
     echo "</files>" >> "${FILES_XML_TMP}"
+    if [[ "${XML_OUTPUT}" = "y" ]] ; then
     _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
+    fi
 fi
