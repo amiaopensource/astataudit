@@ -382,10 +382,17 @@ _find_a_font
 FILE_NUMBER="0"
 CSV_HEADER=""
 CSV_ROW=""
-while [[ "${@}" != "" ]] ; do
-    FILENAME="$1"
-    BASENAME=$(basename "${FILENAME}")
-    shift
-    _process_file "${FILENAME}"
-    ((FILE_NUMBER++))
-done
+
+INPUT="$1"
+if [[ -f "${INPUT}" ]] ; then
+    while [[ "${@}" != "" ]] ; do
+        _process_file "${INPUT}"
+        ((FILE_NUMBER++))
+        shift
+    done
+elif [[ -d "${INPUT}" ]] ; then
+    while read FILE ; do
+        _process_file "${FILE}"
+        ((FILE_NUMBER++))
+    done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
+fi
