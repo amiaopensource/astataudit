@@ -264,6 +264,26 @@ _get_csv_row(){
     _add_column local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
 }
 
+_make_astats_csv_body(){
+    FILENAME="${1}"
+    ASTATS_CSV="${2}"
+    ffprobe -f lavfi -i "amovie=${FILENAME},astats=metadata=1:reset=1" -show_frames -of csv >> "${ASTATS_CSV}"
+}
+
+_make_astats_csv(){
+    FILENAME="${1}"
+    ASTATS_CSV="${1}.astats.csv"
+    DURATION="${2}"
+    DURATION_LITTLE_LESS="$(echo "${DURATION}" - 0.1 | bc -l)"
+    if [[ ! -f "${ASTATS_CSV}" ]] ; then
+        _report -d "Making astats csv for ${FILENAME}..."
+        ffprobe -f lavfi -i "amovie=${FILENAME}:sp=${DURATION_LITTLE_LESS},astats=metadata=1:reset=1" -show_frames -of csv=nk=0 2>/dev/null | tail -n 1 | sed 's/=[^,]*//g' > "${ASTATS_CSV}"
+        _make_astats_csv_body "${FILENAME}" "${ASTATS_CSV}"
+    else
+        _report -d "Astats csv for ${FILENAME} already exists, skipping."
+    fi
+}
+
 _make_graph(){
     FILENAME="${1}"
     BASENAME=$(basename "${FILENAME}")
@@ -390,6 +410,7 @@ _process_file(){
         # variables to keep
         DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
         _make_graph "${FILENAME}"
+        _make_astats_csv "${FILENAME}" "${DURATION}"
     else
         _report -d "Skipping ${FILENAME}. (no audio stream found)"
     fi
