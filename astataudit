@@ -398,7 +398,7 @@ CSV_HEADER=""
 CSV_ROW=""
 
 INPUT="$1"
-FFPROBE_SETTINGS=(-of xml=x=1:q=1 -noprivate -show_format -show_streams)
+FFPROBE_SETTINGS=(-of xml=x=1:q=1 -noprivate -show_format -show_streams -show_chapters)
 NOW="$(_get_iso8601_c)"
 if [[ -f "${INPUT}" ]] ; then
     OUTPUT_CSV="astatsaudit_${NOW}.csv"
