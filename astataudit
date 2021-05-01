@@ -63,6 +63,7 @@ _find_a_font(){
 
 _finish_xml(){
     INVENTORY_XML="${1}"
+    _report -d "Finalizing xml output at ${INVENTORY_XML}"
     xml select \
         -N "rdf=http://www.w3.org/1999/02/22-rdf-syntax-ns#" \
         -N "asa=https://github.com/amiaopensource/astatsaudit" \
@@ -267,6 +268,7 @@ _make_graph(){
     FILENAME="${1}"
     BASENAME=$(basename "${FILENAME}")
     OUTPUT_GRAPH="${1}.astatsaudit.png"
+    _report -d "Generating a graph at ${OUTPUT_GRAPH}"
     # image settings
     AUDIO_SAMPLE_RATE=48000
     HEADER_HEIGHT=24
