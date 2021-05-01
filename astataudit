@@ -115,6 +115,10 @@ _get_iso8601(){
     date +%FT%T
 }
 
+_get_iso8601_c(){
+    date +%Y%m%d-%H%M%S
+}
+
 _maketemp(){
     mktemp -q -t "$(basename "${0}").XXXXXX"
     if [ "${?}" -ne 0 ]; then
@@ -375,9 +379,9 @@ _process_file(){
         "${BWFME_CMD[@]}"
         # express csv row (with header if on first row)
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
-            echo "${CSV_HEADER}" | sed 's/.$//'
+            echo "${CSV_HEADER}" | sed 's/.$//' > "${OUTPUT_CSV}"
         fi
-        echo "${CSV_ROW}" | sed 's/.$//'
+        echo "${CSV_ROW}" | sed 's/.$//' >> "${OUTPUT_CSV}"
         # variables to keep
         DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
         _make_graph "${FILENAME}"
@@ -395,7 +399,9 @@ CSV_ROW=""
 
 INPUT="$1"
 FFPROBE_SETTINGS=(-of xml=x=1:q=1 -noprivate -show_format -show_streams)
+NOW="$(_get_iso8601_c)"
 if [[ -f "${INPUT}" ]] ; then
+    OUTPUT_CSV="astatsaudit_${NOW}.csv"
     while [[ "${@}" != "" ]] ; do
         INPUT="$1"
         FILES_XML_TMP="$(_maketemp)"
@@ -408,6 +414,7 @@ if [[ -f "${INPUT}" ]] ; then
 elif [[ -d "${INPUT}" ]] ; then
     FILES_XML_TMP="$(_maketemp)"
     OUTPUT_XML="${INPUT}/astatsaudit.xml"
+    OUTPUT_CSV="${INPUT}/astatsaudit.csv"
     echo "<files>" > "${FILES_XML_TMP}"
     while read FILE ; do
         _process_file "${FILE}"
