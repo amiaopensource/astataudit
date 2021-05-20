@@ -380,17 +380,17 @@ _make_graph(){
         MARK_TIME="$(_ss_to_hhmmss "${MARK}")"
         TIMELINE+=",drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:text='${MARK_TIME}':x=${MARK_X}-text_w:y=(${HEADER_HEIGHT}-${TIMELINE_FONTSIZE})/2"
     done
-    GRAPH_FILTER="asplit=2[j][k];
+    GRAPH_FILTER="asplit=3[j][k][l];
         `#timeline`
         color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT}${TIMELINE},split=4[top1][top2][top3][top4];
         color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size\: ${AUDIO_FRAME_SIZE}'[Header];
-        [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=5[astats1][astats2][astats3][astats4][astats5];
         `#peak/rms left`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 1 Level, -70 to 0 dBFS, Blue=peak, Yellow=RMS'[peakLH];
         `#peak/rms right`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 2 Level, -70 to 0 dBFS, Purple=peak, Yellow=RMS'[peakRH];
         `#min/max`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Audio Min/Max Level -1...1. Blue=channel 1, Purple=channel 2.'[minmaxH];
         `#phase`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Correlation, -1 to 1'[phaseH];
         `#dc offset`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='DC Offset, -0.01 to 0.01 dBFS offset in the mean displacement from 0'[dcoffH];
         `#crest`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Crest Factor, -1 to 1 ratio of peak level to RMS level, Blue=Channel 1, Purple=Channel 2`#High levels may indicate prior compression`'[crestH];
+        [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=4[astats1][astats2][astats3][astats4];
             [astats1]adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.astats.1.Peak_level:fg1=0xFFFF0000:
                 m2=lavfi.astats.1.RMS_level:fg2=0xFF00FFFF:
@@ -413,13 +413,13 @@ _make_graph(){
                 min=-1:max=1:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[minmax1];
-            [astats4]adrawgraph=${DRAWGRAPH_SETTINGS}:
+        [j]${AUDIOFORMAT},astats=metadata=1,adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.astats.1.DC_offset:fg1=if(gte(VAL\,0.005)\,0xFF0000FF\,if(lte(VAL\,-0.005)\,0xFF0000FF\,0xFF00FF00)):
                 m2=lavfi.astats.2.DC_offset:
                 min=-0.01:max=0.01:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[dcoff1];
-            [astats5]adrawgraph=${DRAWGRAPH_SETTINGS}:
+            [astats4]adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.astats.1.Crest_factor:fg1=0xFFFF00FF:
                 m2=lavfi.astats.2.Crest_factor:fg2=0xFFFF0000:
                 max=10:min=0:
