@@ -260,6 +260,9 @@ _get_csv_row(){
     # FILTER_REPORT, FFPROBE_REPORT, BWFMETAEDIT_REPORT
     unset CSV_ROW
 
+    #local math
+    RMS_level_ch_offset="$(echo "$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB") - $(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")" | bc)"
+
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
     #    'ffprobe' to read from FFPROBE_REPORT
@@ -321,6 +324,7 @@ _get_csv_row(){
     _add_column astats  1       "RMS level dB"
     _add_column astats  2       "RMS level dB"
     _add_column astats  Overall "RMS level dB"
+    _add_column local   ""      "RMS level channel offset" "${RMS_level_ch_offset}"
     _add_column astats  1       "RMS peak dB"
     _add_column astats  2       "RMS peak dB"
     _add_column astats  Overall "RMS peak dB"
