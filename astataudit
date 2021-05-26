@@ -75,7 +75,11 @@ _add_column(){
         if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
             CSV_HEADER+="${SECTION}.${KEY},"
         elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
-            CSV_HEADER+="${KEY// /_}_${SECTION},"
+            if [[ "${SECTION:0:5}" = "lavfi" ]] ; then
+                CSV_HEADER+="${KEY// /_},"
+            else
+                CSV_HEADER+="${KEY// /_}_${SECTION},"
+            fi
         elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
             CSV_HEADER+="${KEY},"
         fi
@@ -168,6 +172,8 @@ _astats_parse(){
     KEY="${3}"
     if [[ "${SECTION}" == "Overall" ]] ; then
         VALUE="$(sed '1,/Overall$/d' "${ASTATS_DOC}" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
+    elif [[ "${SECTION:0:5}" == "lavfi" ]] ; then
+        grep "${SECTION}" "${ASTATS_DOC}" | cut -d "=" -f2- | head -n 1
     else
         VALUE="$(sed -n "s/Overall$/Channel: X/g;/Channel: ${SECTION}/,/Channel/p" "${ASTATS_DOC}" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
     fi
@@ -239,7 +245,7 @@ _get_metadata(){
     FILTER_REPORT="$(_maketemp)"
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
-    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=2147483647:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
     {
         echo "<astats>"
         grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
@@ -268,6 +274,7 @@ _get_csv_row(){
     _add_column astats  Overall "Bit depth"
     _add_column ffprobe streams stream.0.channels
     _add_column ffprobe streams stream.0.codec_name
+    _add_column astats  lavfi   "Correlation"
     _add_column astats  1       "Crest factor"
     _add_column astats  2       "Crest factor"
     _add_column astats  1       "DC offset"
