@@ -87,28 +87,28 @@ _add_column(){
     KEY="${3}"
     VALUE="${4}"
     if [[ "${FULL_DATA}" = "n" && "${IF_FULL}" = "n" ]] ; then
-    if [[ "${FILE_NUMBER}" = "0" ]] ; then
-        if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
-            CSV_HEADER+="${SECTION}.${KEY},"
-        elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
-            if [[ "${SECTION:0:5}" = "lavfi" ]] ; then
-                CSV_HEADER+="${KEY// /_},"
-            else
-                CSV_HEADER+="${KEY// /_}_${SECTION},"
+        if [[ "${FILE_NUMBER}" = "0" ]] ; then
+            if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
+                CSV_HEADER+="${SECTION}.${KEY},"
+            elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
+                if [[ "${SECTION:0:5}" = "lavfi" ]] ; then
+                    CSV_HEADER+="${KEY// /_},"
+                else
+                    CSV_HEADER+="${KEY// /_}_${SECTION},"
+                fi
+            elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
+                CSV_HEADER+="${KEY},"
             fi
-        elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
-            CSV_HEADER+="${KEY},"
         fi
-    fi
-    if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
-        CSV_ROW+="$(_flat_ffprobe_parse "${FFPROBE_REPORT}" "${SECTION}.${KEY}"),"
-    elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
-        CSV_ROW+="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}"),"
-    elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
-        CSV_ROW+="${VALUE},"
-    else
-        _report -w "Unexpected error in _add_column, REPORT_SOURCE=(${REPORT_SOURCE}), SECTION=(${SECTION}), KEY=(${KEY})"
-    fi
+        if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
+            CSV_ROW+="$(_flat_ffprobe_parse "${FFPROBE_REPORT}" "${SECTION}.${KEY}"),"
+        elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
+            CSV_ROW+="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}"),"
+        elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
+            CSV_ROW+="${VALUE},"
+        else
+            _report -w "Unexpected error in _add_column, REPORT_SOURCE=(${REPORT_SOURCE}), SECTION=(${SECTION}), KEY=(${KEY})"
+        fi
     fi
 }
 
