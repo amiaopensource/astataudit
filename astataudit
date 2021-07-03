@@ -488,37 +488,37 @@ _process_file(){
     BASENAME="$(basename "${FILENAME}")"
     unset CSV_ROW
     FILTER_TMP_XMLD="$(_maketemp)"
-        _report -d "Processing: ${BASENAME}"
-        if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
-            _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
+    _report -d "Processing: ${BASENAME}"
+    if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
+        _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
+    fi
+    if [[ "${XML_OUTPUT}" = "y" ]] ; then
+        # gather xml data
+        FFMPEG_TMP="${FILES_XML_TMP}.ff.${FILE_NUMBER}.xml"
+        BWFME_TMP="${FILES_XML_TMP}.bwf.${FILE_NUMBER}.xml"
+        echo "<f ff=\"${FFMPEG_TMP}\" bwf=\"${BWFME_TMP}\" astats=\"${FILTER_TMP_XMLD}\">$(echo "${FILENAME}" | sed 's/.*\/\|.*\///g')</f>" >> "${FILES_XML_TMP}"
+        FFPROBE_CMD=(ffprobe -v 0 "${FILENAME}" "${FFPROBE_SETTINGS[@]}")
+        "${FFPROBE_CMD[@]}" > "${FFMPEG_TMP}"
+        BWFME_CMD=(bwfmetaedit --out-core-xml="${BWFME_TMP}" "${FILENAME}")
+        "${BWFME_CMD[@]}" 2>/dev/null
+    fi
+    if [[ "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
+        # express csv row (with header if on first row)
+        _report -d "    Adding metadata to the file summary csv"
+        _get_csv_row "${FILENAME}"
+        if [[ "${FILE_NUMBER}" = "0" ]] ; then
+            echo "${CSV_HEADER}" | sed 's/.$//' > "${OUTPUT_CSV}"
         fi
-        if [[ "${XML_OUTPUT}" = "y" ]] ; then
-            # gather xml data
-            FFMPEG_TMP="${FILES_XML_TMP}.ff.${FILE_NUMBER}.xml"
-            BWFME_TMP="${FILES_XML_TMP}.bwf.${FILE_NUMBER}.xml"
-            echo "<f ff=\"${FFMPEG_TMP}\" bwf=\"${BWFME_TMP}\" astats=\"${FILTER_TMP_XMLD}\">$(echo "${FILENAME}" | sed 's/.*\/\|.*\///g')</f>" >> "${FILES_XML_TMP}"
-            FFPROBE_CMD=(ffprobe -v 0 "${FILENAME}" "${FFPROBE_SETTINGS[@]}")
-            "${FFPROBE_CMD[@]}" > "${FFMPEG_TMP}"
-            BWFME_CMD=(bwfmetaedit --out-core-xml="${BWFME_TMP}" "${FILENAME}")
-            "${BWFME_CMD[@]}" 2>/dev/null
-        fi
-        if [[ "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
-            # express csv row (with header if on first row)
-            _report -d "    Adding metadata to the file summary csv"
-            _get_csv_row "${FILENAME}"
-            if [[ "${FILE_NUMBER}" = "0" ]] ; then
-                echo "${CSV_HEADER}" | sed 's/.$//' > "${OUTPUT_CSV}"
-            fi
-            echo "${CSV_ROW}" | sed 's/.$//' >> "${OUTPUT_CSV}"
-        fi
-        if [[ "${GRAPH_OUTPUT}" = "y" ]] ; then
-            # variables to keep
-            DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
-            _make_graph "${FILENAME}"
-        fi
-        if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
-            _make_astats_csv "${FILENAME}" "${DURATION}"
-        fi
+        echo "${CSV_ROW}" | sed 's/.$//' >> "${OUTPUT_CSV}"
+    fi
+    if [[ "${GRAPH_OUTPUT}" = "y" ]] ; then
+        # variables to keep
+        DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
+        _make_graph "${FILENAME}"
+    fi
+    if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
+        _make_astats_csv "${FILENAME}" "${DURATION}"
+    fi
 }
 
 _check_dependencies bwfmetaedit ffmpeg ffprobe bc xmlstarlet
@@ -540,9 +540,9 @@ if [[ -f "${INPUT}" ]] ; then
         OUTPUT_XML="${INPUT}.astatsaudit.xml"
         IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${INPUT}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
         if [[ "${IS_AUDIO}" = "audio" ]] ; then
-        _process_file "${INPUT}"
-        _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
-        ((FILE_NUMBER++))
+            _process_file "${INPUT}"
+            _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
+            ((FILE_NUMBER++))
         else
             _report -d "Skipping: ${INPUT} (no audio stream found)"
         fi
@@ -557,8 +557,8 @@ elif [[ -d "${INPUT}" ]] ; then
     while read FILE ; do
         IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
         if [[ "${IS_AUDIO}" = "audio" ]] ; then
-        _process_file "${FILE}"
-        ((FILE_NUMBER++))
+            _process_file "${FILE}"
+            ((FILE_NUMBER++))
         else
             _report -d "Skipping: ${FILE} (no audio stream found)"
         fi
