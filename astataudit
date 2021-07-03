@@ -282,7 +282,13 @@ _get_csv_row(){
     unset CSV_ROW
 
     #local math
-    RMS_level_ch_offset="$(echo "$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB") - $(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")" | bc)"
+    RMS_level_1="$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB")"
+    RMS_level_2="$(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")"
+    if [[ -n "${RMS_level_1}" && -n "${RMS_level_2}" ]] ; then
+        RMS_level_ch_offset="$(echo "$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB") - $(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")" | bc)"
+    else
+        RMS_level_ch_offset=""
+    fi
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
