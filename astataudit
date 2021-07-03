@@ -448,8 +448,8 @@ _make_graph(){
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[dcoff1];
             [astats4]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Crest_factor:fg1=0xFFFF00FF:
-                m2=lavfi.astats.2.Crest_factor:fg2=0xFFFF0000:
+                m1=lavfi.astats.1.Crest_factor:fg1=0xFFFF0000:
+                m2=lavfi.astats.2.Crest_factor:fg2=0xFFFF00FF:
                 max=10:min=0:
                 slide=picture:
                 mode=line:
