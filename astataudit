@@ -488,8 +488,6 @@ _process_file(){
     BASENAME="$(basename "${FILENAME}")"
     unset CSV_ROW
     FILTER_TMP_XMLD="$(_maketemp)"
-    IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILENAME}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
-    if [[ "${IS_AUDIO}" = "audio" ]] ; then
         _report -d "Processing: ${BASENAME}"
         if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
             _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
@@ -521,9 +519,6 @@ _process_file(){
         if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
             _make_astats_csv "${FILENAME}" "${DURATION}"
         fi
-    else
-        _report -d "Skipping: ${FILENAME} (no audio stream found)"
-    fi
 }
 
 _check_dependencies bwfmetaedit ffmpeg ffprobe bc xmlstarlet
@@ -543,9 +538,14 @@ if [[ -f "${INPUT}" ]] ; then
         INPUT="$1"
         FILES_XML_TMP="$(_maketemp)"
         OUTPUT_XML="${INPUT}.astatsaudit.xml"
+        IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${INPUT}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
+        if [[ "${IS_AUDIO}" = "audio" ]] ; then
         _process_file "${INPUT}"
         _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
         ((FILE_NUMBER++))
+        else
+            _report -d "Skipping: ${INPUT} (no audio stream found)"
+        fi
         shift
     done
 elif [[ -d "${INPUT}" ]] ; then
@@ -555,8 +555,13 @@ elif [[ -d "${INPUT}" ]] ; then
     OUTPUT_CSV="${INPUT}/astatsaudit.csv"
     echo "<files>" > "${FILES_XML_TMP}"
     while read FILE ; do
+        IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
+        if [[ "${IS_AUDIO}" = "audio" ]] ; then
         _process_file "${FILE}"
         ((FILE_NUMBER++))
+        else
+            _report -d "Skipping: ${FILE} (no audio stream found)"
+        fi
     done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
     echo "</files>" >> "${FILES_XML_TMP}"
     if [[ "${XML_OUTPUT}" = "y" ]] ; then
