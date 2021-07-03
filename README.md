@@ -20,3 +20,4 @@ astataudit has been tested with:
 - bwfmetaedit
 - ffmpeg 4.3.2. Earlier versions may not work or may omit certain metadata values (such as noise floor information which was added in ffmpeg 4.3)
 - ffprobe
+- xmlstarlet

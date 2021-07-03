@@ -149,7 +149,7 @@ _find_a_font(){
 _finish_xml(){
     INVENTORY_XML="${1}"
     _report -d "Finalizing xml output at ${INVENTORY_XML}"
-    xml select \
+    xmlstarlet select \
         -N "rdf=http://www.w3.org/1999/02/22-rdf-syntax-ns#" \
         -N "asa=https://github.com/amiaopensource/astatsaudit" \
         -N "ffprobe=http://www.ffmpeg.org/schema/ffprobe" \
@@ -169,7 +169,7 @@ _finish_xml(){
             --elem "astats:report" --copy-of "document(@astats)/astats/text()" -b \
             --elem "bwfme:fullReport" \
                   --copy-of "document(@bwf)/*" \
-        "${INVENTORY_XML}" | xml fo
+        "${INVENTORY_XML}" | xmlstarlet fo
 }
 
 _flat_ffprobe_parse(){
@@ -522,7 +522,7 @@ _process_file(){
     fi
 }
 
-_check_dependencies bwfmetaedit ffmpeg ffprobe bc
+_check_dependencies bwfmetaedit ffmpeg ffprobe bc xmlstarlet
 _find_a_font
 
 FILE_NUMBER="0"
