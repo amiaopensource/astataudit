@@ -383,9 +383,23 @@ _make_astats_csv_body(){
 }
 
 _make_astats_csv(){
-    FILENAME="${1}"
+    OPTIND=1
+    unset OUTPUT_DIR
+    while getopts "o:" opt ; do
+        case "${opt}" in
+            o) OUTPUT_DIR="${OPTARG}" ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
+
+    FILENAME="$1"
+    if [[ -z "${OUTPUT_DIR}" ]] ; then
+        OUTPUT_DIR="$(dirname "${FILENAME}")"
+    fi
     BASENAME="$(basename "${FILENAME}")"
-    ASTATS_CSV="${1}.astats.csv"
+    ASTATS_CSV="${OUTPUT_DIR}/${BASENAME}.astats.csv"
     DURATION="${2}"
     DURATION_LITTLE_LESS="$(echo "${DURATION}" - 0.1 | bc -l)"
     if [[ ! -f "${ASTATS_CSV}" ]] ; then
@@ -398,9 +412,23 @@ _make_astats_csv(){
 }
 
 _make_graph(){
+    OPTIND=1
+    unset OUTPUT_DIR
+    while getopts "o:" opt ; do
+        case "${opt}" in
+            o) OUTPUT_DIR="${OPTARG}" ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
+
     FILENAME="${1}"
+    if [[ -z "${OUTPUT_DIR}" ]] ; then
+        OUTPUT_DIR="$(dirname "${FILENAME}")"
+    fi
     BASENAME=$(basename "${FILENAME}")
-    OUTPUT_GRAPH="${1}.astatsaudit.png"
+    OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.png"
     _report -d "    Generating a graph at ${OUTPUT_GRAPH}"
     # image settings
     AUDIO_SAMPLE_RATE=48000
@@ -507,7 +535,21 @@ _make_graph(){
 }
 
 _process_file(){
+    OPTIND=1
+    unset OUTPUT_DIR
+    while getopts "o:" opt ; do
+        case "${opt}" in
+            o) OUTPUT_DIR="${OPTARG}" ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
+
     FILENAME="$1"
+    if [[ -z "${OUTPUT_DIR}" ]] ; then
+        OUTPUT_DIR="$(dirname "${FILENAME}")"
+    fi
     BASENAME="$(basename "${FILENAME}")"
     unset CSV_ROW
     FILTER_TMP_XMLD="$(_maketemp)"
@@ -537,10 +579,10 @@ _process_file(){
     if [[ "${GRAPH_OUTPUT}" = "y" ]] ; then
         # variables to keep
         DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
-        _make_graph "${FILENAME}"
+        _make_graph -o "${OUTPUT_DIR}" "${FILENAME}"
     fi
     if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
-        _make_astats_csv "${FILENAME}" "${DURATION}"
+        _make_astats_csv -o "${OUTPUT_DIR}" "${FILENAME}" "${DURATION}"
     fi
 }
 
@@ -572,15 +614,22 @@ if [[ -f "${INPUT}" ]] ; then
         shift
     done
 elif [[ -d "${INPUT}" ]] ; then
-    _report -d "${THIS_NAME} will process audio files in: ${INPUT}"
+    OUTPUT_DIR="${INPUT}_astatauditfiles"
+    _report -d "${THIS_NAME} will process audio files in ${INPUT} to ${OUTPUT_DIR}."
+    if [[ -d "${OUTPUT_DIR}" ]] ; then
+        _report -w "Error: ${OUTPUT_DIR} already exists."
+        exit 1
+    else
+        mkdir "${OUTPUT_DIR}"
+    fi
     FILES_XML_TMP="$(_maketemp)"
-    OUTPUT_XML="${INPUT}/astatsaudit.xml"
-    OUTPUT_CSV="${INPUT}/astatsaudit.csv"
+    OUTPUT_XML="${OUTPUT_DIR}/astatsaudit_${NOW}.xml"
+    OUTPUT_CSV="${OUTPUT_DIR}/astatsaudit_${NOW}.csv"
     echo "<files>" > "${FILES_XML_TMP}"
     while read FILE ; do
         IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
         if [[ "${IS_AUDIO}" = "audio" ]] ; then
-            _process_file "${FILE}"
+            _process_file -o "${OUTPUT_DIR}" "${FILE}"
             ((FILE_NUMBER++))
         else
             _report -d "Skipping: ${FILE} (no audio stream found)"
