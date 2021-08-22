@@ -73,10 +73,12 @@ fi
 
 _add_column(){
     IF_FULL="n"
+    unset RELABEL
     OPTIND=1
-    while getopts "f" opt ; do
+    while getopts "fr:" opt ; do
         case "${opt}" in
             f) IF_FULL="y" ;;
+            r) RELABEL="${OPTARG}" ;;
             *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
         esac
@@ -88,7 +90,9 @@ _add_column(){
     VALUE="${4}"
     if [[ "${FULL_DATA}" = "n" && "${IF_FULL}" = "n" ]] ; then
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
-            if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
+            if [[ -n "${RELABEL}" ]] ; then
+                CSV_HEADER+="${RELABEL},"
+            elif [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
                 CSV_HEADER+="${SECTION}.${KEY},"
             elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
                 if [[ "${SECTION:0:5}" = "lavfi" ]] ; then
@@ -106,7 +110,7 @@ _add_column(){
             if [[ "${SECTION}" = "lavfi.aphasemeter.phase" ]] ; then
                 CSV_ROW+="$(grep "${SECTION}=" "${FILTER_REPORT}" | cut -d "=" -f2 | awk '{s+=$1}END{print s/NR}'),"
             else
-                CSV_ROW+="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}"),"
+                CSV_ROW+="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}" "${VALUE}"),"
             fi
         elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
             CSV_ROW+="${VALUE},"
@@ -191,12 +195,16 @@ _astats_parse(){
     ASTATS_DOC="${1}"
     SECTION="${2}"
     KEY="${3}"
+    FILTER_PREFIX="${4}"
+    if [[ -z "${FILTER_PREFIX}" ]] ; then
+        FILTER_PREFIX="Parsed_astats_0"
+    fi
     if [[ "${SECTION}" == "Overall" ]] ; then
-        VALUE="$(sed '1,/Overall$/d' "${ASTATS_DOC}" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
+        VALUE="$(grep "${FILTER_PREFIX}" "${ASTATS_DOC}" | sed '1,/Overall$/d' | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
     elif [[ "${SECTION:0:5}" == "lavfi" ]] ; then
         grep "${SECTION}" "${ASTATS_DOC}" | cut -d "=" -f2- | head -n 1
     else
-        VALUE="$(sed -n "s/Overall$/Channel: X/g;/Channel: ${SECTION}/,/Channel/p" "${ASTATS_DOC}" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
+        VALUE="$(grep "${FILTER_PREFIX}" "${ASTATS_DOC}" | sed -n "s/Overall$/Channel: X/g;/Channel: ${SECTION}/,/Channel/p" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
     fi
     VALUE_LINE_COUNT="$(echo -n "${VALUE}" | grep -c '^')"
     if [[ "${VALUE_LINE_COUNT}" > 1 ]] ; then
@@ -266,7 +274,7 @@ _get_metadata(){
     FILTER_REPORT="$(_maketemp)"
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
-    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=65536:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=65536:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
     {
         echo "<astats>"
         grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
@@ -298,13 +306,15 @@ _get_csv_row(){
     #    if $2=ffprobe then $2 is the section: format or streams
     #    if $1=local then $2 is unused
     # 3: the value or variable to parse from the referenced report
-    # 4: if $1=local then this is the value for the $3 variable
+    # 4: if $1=astats then this is a filter for the astats occurrence (blank for primary, astats_6 for astats of the axcorrelation output (the 6th filter))
+    #    if $1=local then this is the value for the $3 variable
     _add_column -f astats  1       "Bit depth"
     _add_column -f astats  2       "Bit depth"
     _add_column    astats  Overall "Bit depth"
     _add_column    ffprobe streams stream.0.channels
     _add_column    ffprobe streams stream.0.codec_name
-    _add_column    astats  lavfi.aphasemeter.phase   "Correlation"
+    _add_column -r "Correlation (via phase)"         astats  lavfi.aphasemeter.phase   "Correlation"
+    _add_column -r "Correlation (via axcorrelation)" astats  1       "DC offset"              "Parsed_astats_6"
     _add_column    astats  1       "Crest factor"
     _add_column    astats  2       "Crest factor"
     _add_column    astats  1       "DC offset"
@@ -373,9 +383,23 @@ _make_astats_csv_body(){
 }
 
 _make_astats_csv(){
-    FILENAME="${1}"
+    OPTIND=1
+    unset OUTPUT_DIR
+    while getopts "o:" opt ; do
+        case "${opt}" in
+            o) OUTPUT_DIR="${OPTARG}" ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
+
+    FILENAME="$1"
+    if [[ -z "${OUTPUT_DIR}" ]] ; then
+        OUTPUT_DIR="$(dirname "${FILENAME}")"
+    fi
     BASENAME="$(basename "${FILENAME}")"
-    ASTATS_CSV="${1}.astats.csv"
+    ASTATS_CSV="${OUTPUT_DIR}/${BASENAME}.astats.csv"
     DURATION="${2}"
     DURATION_LITTLE_LESS="$(echo "${DURATION}" - 0.1 | bc -l)"
     if [[ ! -f "${ASTATS_CSV}" ]] ; then
@@ -388,9 +412,23 @@ _make_astats_csv(){
 }
 
 _make_graph(){
+    OPTIND=1
+    unset OUTPUT_DIR
+    while getopts "o:" opt ; do
+        case "${opt}" in
+            o) OUTPUT_DIR="${OPTARG}" ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
+
     FILENAME="${1}"
+    if [[ -z "${OUTPUT_DIR}" ]] ; then
+        OUTPUT_DIR="$(dirname "${FILENAME}")"
+    fi
     BASENAME=$(basename "${FILENAME}")
-    OUTPUT_GRAPH="${1}.astatsaudit.png"
+    OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.png"
     _report -d "    Generating a graph at ${OUTPUT_GRAPH}"
     # image settings
     AUDIO_SAMPLE_RATE=48000
@@ -418,7 +456,7 @@ _make_graph(){
         MARK_TIME="$(_ss_to_hhmmss "${MARK}")"
         TIMELINE+=",drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:text='${MARK_TIME}':x=${MARK_X}-text_w:y=(${HEADER_HEIGHT}-${TIMELINE_FONTSIZE})/2"
     done
-    GRAPH_FILTER="asplit=3[j][k][l];
+    GRAPH_FILTER="asplit=4[j][k][l][m];
         `#timeline`
         color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT}${TIMELINE},split=4[top1][top2][top3][top4];
         color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size\: ${AUDIO_FRAME_SIZE}'[Header];
@@ -426,6 +464,7 @@ _make_graph(){
         `#peak/rms right`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 2 Level, -144 to 0 dBFS, Purple=peak, Yellow=RMS'[peakRH];
         `#min/max`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Audio Min/Max Level -1...1. Blue=channel 1, Purple=channel 2.'[minmaxH];
         `#phase`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Correlation, -1 to 1'[phaseH];
+        `#axcorrelate`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Normalized Cross Correlation, -1.1 to 1.1 (-1 to 1 with a boundary)'[axcorrelateH];
         `#dc offset`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='DC Offset, -0.01 to 0.01 dBFS offset in the mean displacement from 0'[dcoffH];
         `#crest`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Crest Factor, -1 to 1 ratio of peak level to RMS level, Blue=Channel 1, Purple=Channel 2`#High levels may indicate prior compression`'[crestH];
         [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=4[astats1][astats2][astats3][astats4];
@@ -470,27 +509,47 @@ _make_graph(){
                 max=1:min=-1:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[phase1];
+        [m]${AUDIOFORMAT},channelsplit,axcorrelate=algo=fast,astats=metadata=1:reset=1,adrawgraph=${DRAWGRAPH_SETTINGS}:
+                m1=lavfi.astats.1.Max_level:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
+                min=-1.1:max=1.1:
+                slide=picture:
+                s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[axcorrelate];
         [Header]
         [top1][peakLH][peakL1][peakRH][peakR1]
-        [top2][minmaxH][minmax1][phaseH][phase1]
+        [top2][minmaxH][minmax1][phaseH][phase1][axcorrelateH][axcorrelate]
         [top3][dcoffH][dcoff1][crestH][crest1]
-        [top4]vstack=17,drawgrid=thickness=1:color=gray@0.5:width=iw/${VERTICAL_MARKINGS},drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:width=(iw/${VERTICAL_MARKINGS})/10[graph];
+        [top4]vstack=19,drawgrid=thickness=1:color=gray@0.5:width=iw/${VERTICAL_MARKINGS},drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:width=(iw/${VERTICAL_MARKINGS})/10[graph];
         color=c=${BORDER_COLOR}:s=${PAD_W}x${HEADER_HEIGHT_BIG}[HeaderG];
-        color=c=${BORDER_COLOR}:s=${PAD_W}x${HEADER_HEIGHT},split=10[top1G][top2G][top3G][top4G][peakLHG][peakRHG][minmaxHG][phaseHG][dcoffHG][crestHG];
+        color=c=${BORDER_COLOR}:s=${PAD_W}x${HEADER_HEIGHT},split=11[top1G][top2G][top3G][top4G][peakLHG][peakRHG][minmaxHG][phaseHG][axcorrelateHG][dcoffHG][crestHG];
         `#1-1_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='0',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-0.5',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='+0.5',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2,split=4[minmax1G][phase1G][crest1G][dcoff1G];
+                `#1.1-1.1_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='0',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-0.42',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='+0.42',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2[axcorrelateG];
         `#-144-0_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='-72',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-108',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='-36',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.02:x=w*0.7:text='0',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2,split=2[peakL1G][peakR1G];
         [HeaderG]
         [top1G][peakLHG][peakL1G][peakRHG][peakR1G]
-        [top2G][minmaxHG][minmax1G][phaseHG][phase1G]
+        [top2G][minmaxHG][minmax1G][phaseHG][phase1G][axcorrelateHG][axcorrelateG]
         [top3G][dcoffHG][dcoff1G][crestHG][crest1G]
-        [top4G]vstack=17[grat];
+        [top4G]vstack=19[grat];
         [grat][graph]hstack=2[chart]"
     ffmpeg "${FFMPEG_VERBOSE[@]}" -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
         -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
 }
 
 _process_file(){
+    OPTIND=1
+    unset OUTPUT_DIR
+    while getopts "o:" opt ; do
+        case "${opt}" in
+            o) OUTPUT_DIR="${OPTARG}" ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
+
     FILENAME="$1"
+    if [[ -z "${OUTPUT_DIR}" ]] ; then
+        OUTPUT_DIR="$(dirname "${FILENAME}")"
+    fi
     BASENAME="$(basename "${FILENAME}")"
     unset CSV_ROW
     FILTER_TMP_XMLD="$(_maketemp)"
@@ -520,10 +579,10 @@ _process_file(){
     if [[ "${GRAPH_OUTPUT}" = "y" ]] ; then
         # variables to keep
         DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
-        _make_graph "${FILENAME}"
+        _make_graph -o "${OUTPUT_DIR}" "${FILENAME}"
     fi
     if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
-        _make_astats_csv "${FILENAME}" "${DURATION}"
+        _make_astats_csv -o "${OUTPUT_DIR}" "${FILENAME}" "${DURATION}"
     fi
 }
 
@@ -555,15 +614,22 @@ if [[ -f "${INPUT}" ]] ; then
         shift
     done
 elif [[ -d "${INPUT}" ]] ; then
-    _report -d "${THIS_NAME} will process audio files in: ${INPUT}"
+    OUTPUT_DIR="${INPUT}_astatauditfiles"
+    _report -d "${THIS_NAME} will process audio files in ${INPUT} to ${OUTPUT_DIR}."
+    if [[ -d "${OUTPUT_DIR}" ]] ; then
+        _report -w "Error: ${OUTPUT_DIR} already exists."
+        exit 1
+    else
+        mkdir "${OUTPUT_DIR}"
+    fi
     FILES_XML_TMP="$(_maketemp)"
-    OUTPUT_XML="${INPUT}/astatsaudit.xml"
-    OUTPUT_CSV="${INPUT}/astatsaudit.csv"
+    OUTPUT_XML="${OUTPUT_DIR}/astatsaudit_${NOW}.xml"
+    OUTPUT_CSV="${OUTPUT_DIR}/astatsaudit_${NOW}.csv"
     echo "<files>" > "${FILES_XML_TMP}"
     while read FILE ; do
         IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
         if [[ "${IS_AUDIO}" = "audio" ]] ; then
-            _process_file "${FILE}"
+            _process_file -o "${OUTPUT_DIR}" "${FILE}"
             ((FILE_NUMBER++))
         else
             _report -d "Skipping: ${FILE} (no audio stream found)"
