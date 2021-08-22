@@ -313,8 +313,8 @@ _get_csv_row(){
     _add_column    astats  Overall "Bit depth"
     _add_column    ffprobe streams stream.0.channels
     _add_column    ffprobe streams stream.0.codec_name
-    _add_column    astats  lavfi.aphasemeter.phase   "Correlation"
-    _add_column    astats  1       "DC offset"              "Parsed_astats_6"
+    _add_column -r "Correlation (via phase)"         astats  lavfi.aphasemeter.phase   "Correlation"
+    _add_column -r "Correlation (via axcorrelation)" astats  1       "DC offset"              "Parsed_astats_6"
     _add_column    astats  1       "Crest factor"
     _add_column    astats  2       "Crest factor"
     _add_column    astats  1       "DC offset"
