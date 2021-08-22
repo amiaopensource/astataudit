@@ -73,10 +73,12 @@ fi
 
 _add_column(){
     IF_FULL="n"
+    unset RELABEL
     OPTIND=1
-    while getopts "f" opt ; do
+    while getopts "fr:" opt ; do
         case "${opt}" in
             f) IF_FULL="y" ;;
+            r) RELABEL="${OPTARG}" ;;
             *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
         esac
@@ -88,7 +90,9 @@ _add_column(){
     VALUE="${4}"
     if [[ "${FULL_DATA}" = "n" && "${IF_FULL}" = "n" ]] ; then
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
-            if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
+            if [[ -n "${RELABEL}" ]] ; then
+                CSV_HEADER+="${RELABEL},"
+            elif [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
                 CSV_HEADER+="${SECTION}.${KEY},"
             elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
                 if [[ "${SECTION:0:5}" = "lavfi" ]] ; then
