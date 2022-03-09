@@ -33,6 +33,8 @@ Options:
  -x (y|n)  (Enable xml output, default 'y')
  -g (y|n)  (Enable graph output, default 'y')
 
+ -o DIR    (Send output files to the specified directory. Default is a directory next to the input.)
+
  -X        (By default the file summary csv will contain a core set of
             metadata. The '-X' option adds more values.)
 
@@ -50,7 +52,7 @@ CSV_FRAMES_OUTPUT="y"
 XML_OUTPUT="y"
 GRAPH_OUTPUT="y"
 FULL_DATA="n"
-while getopts "hvc:f:x:g:X" opt ; do
+while getopts "hvc:f:x:g:o:X" opt ; do
     case "${opt}" in
         h) _usage ; exit ;;
         v) VERBOSE=true ;;
@@ -58,6 +60,7 @@ while getopts "hvc:f:x:g:X" opt ; do
         f) CSV_FRAMES_OUTPUT="${OPTARG}" ;;
         x) XML_OUTPUT="${OPTARG}" ;;
         g) GRAPH_OUTPUT="${OPTARG}" ;;
+        o) SET_OUTPUT_DIR="${OPTARG}" ;;
         X) FULL_DATA="y" ;;
         *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
@@ -557,6 +560,9 @@ _process_file(){
     if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
     fi
+    if [[ ! -d "${OUTPUT_DIR}" ]] ; then
+        mkdir -p "${OUTPUT_DIR}"
+    fi
     if [[ "${XML_OUTPUT}" = "y" ]] ; then
         # gather xml data
         FFMPEG_TMP="${FILES_XML_TMP}.ff.${FILE_NUMBER}.xml"
@@ -602,10 +608,18 @@ if [[ -f "${INPUT}" ]] ; then
     while [[ "${@}" != "" ]] ; do
         INPUT="$1"
         FILES_XML_TMP="$(_maketemp)"
-        OUTPUT_XML="${INPUT}.astatsaudit.xml"
+        if [[ -n "${SET_OUTPUT_DIR}" ]] ; then
+            OUTPUT_XML="${SET_OUTPUT_DIR}/$(basename "${INPUT}").astatsaudit.xml"
+        else
+            OUTPUT_XML="${INPUT}.astatsaudit.xml"
+        fi
         IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${INPUT}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
         if [[ "${IS_AUDIO}" = "audio" ]] ; then
-            _process_file "${INPUT}"
+            if [[ -n "${SET_OUTPUT_DIR}" ]] ; then
+                _process_file -o "${SET_OUTPUT_DIR}" "${INPUT}"
+            else
+                _process_file "${INPUT}"
+            fi
             _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
             ((FILE_NUMBER++))
         else
@@ -614,13 +628,17 @@ if [[ -f "${INPUT}" ]] ; then
         shift
     done
 elif [[ -d "${INPUT}" ]] ; then
-    OUTPUT_DIR="${INPUT}_astatauditfiles"
+    if [[ -n "${SET_OUTPUT_DIR}" ]] ; then
+        OUTPUT_DIR="${SET_OUTPUT_DIR}"
+    else
+        OUTPUT_DIR="${INPUT}_astatauditfiles"
+    fi
     _report -d "${THIS_NAME} will process audio files in ${INPUT} to ${OUTPUT_DIR}."
     if [[ -d "${OUTPUT_DIR}" ]] ; then
         _report -w "Error: ${OUTPUT_DIR} already exists."
         exit 1
     else
-        mkdir "${OUTPUT_DIR}"
+        mkdir -p "${OUTPUT_DIR}"
     fi
     FILES_XML_TMP="$(_maketemp)"
     OUTPUT_XML="${OUTPUT_DIR}/astatsaudit_${NOW}.xml"
