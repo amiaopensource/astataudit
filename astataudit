@@ -634,7 +634,7 @@ elif [[ -d "${INPUT}" ]] ; then
         OUTPUT_DIR="${INPUT}_astatauditfiles"
     fi
     _report -d "${THIS_NAME} will process audio files in ${INPUT} to ${OUTPUT_DIR}."
-    if [[ -d "${OUTPUT_DIR}" ]] ; then
+    if [[ -d "${OUTPUT_DIR}" && -z "${SET_OUTPUT_DIR}" ]] ; then
         _report -w "Error: ${OUTPUT_DIR} already exists."
         exit 1
     else
