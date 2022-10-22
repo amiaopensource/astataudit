@@ -78,10 +78,12 @@ _add_column(){
     IF_FULL="n"
     unset RELABEL
     OPTIND=1
-    while getopts "fr:" opt ; do
+    while getopts "fr:PH" opt ; do
         case "${opt}" in
             f) IF_FULL="y" ;;
             r) RELABEL="${OPTARG}" ;;
+            P) AS_PERCENT="Y" ;;
+            H) ROUND="Y" ;;
             *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
         esac
@@ -103,23 +105,38 @@ _add_column(){
                 else
                     CSV_HEADER+="${KEY// /_}_${SECTION},"
                 fi
+            elif [[ "${REPORT_SOURCE}" = "bwfmetaedit" ]] ; then
+                 CSV_HEADER+="${KEY} (BWFME ${SECTION}),"
             elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
                 CSV_HEADER+="${KEY},"
             fi
         fi
         if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
-            CSV_ROW+="$(_flat_ffprobe_parse "${FFPROBE_REPORT}" "${SECTION}.${KEY}"),"
+           CSV_VALUE="$(_flat_ffprobe_parse "${FFPROBE_REPORT}" "${SECTION}.${KEY}")"
         elif [[ "${REPORT_SOURCE}" = "astats" ]] ; then
             if [[ "${SECTION}" = "lavfi.aphasemeter.phase" ]] ; then
-                CSV_ROW+="$(grep "${SECTION}=" "${FILTER_REPORT}" | cut -d "=" -f2 | awk '{s+=$1}END{print s/NR}'),"
+                CSV_VALUE="$(grep "${SECTION}=" "${FILTER_REPORT}" | cut -d "=" -f2 | awk '{s+=$1}END{print s/NR}')"
             else
-                CSV_ROW+="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}" "${VALUE}"),"
+                CSV_VALUE="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}" "${VALUE}")"
+            fi
+        elif [[ "${REPORT_SOURCE}" = "bwfmetaedit" ]] ; then
+            if [[ "${SECTION}" = "Core" ]] ; then
+                CSV_VALUE="$(_csv_parse "${KEY}" "${BWFMETAEDIT_CORE}")"
+            elif [[ "${SECTION}" = "Tech" ]] ; then
+                CSV_VALUE="$(_csv_parse "${KEY}" "${BWFMETAEDIT_TECH}")"
             fi
         elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
-            CSV_ROW+="${VALUE},"
+            CSV_VALUE="${VALUE}"
         else
             _report -w "Unexpected error in _add_column, REPORT_SOURCE=(${REPORT_SOURCE}), SECTION=(${SECTION}), KEY=(${KEY})"
+            CSV_VALUE=""
         fi
+        if [[ "${AS_PERCENT}" == "Y" ]] ; then
+            CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f%%\n", $1 * 100}')"
+        elif [[ "${ROUND}" == "Y" ]] ; then
+            CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f"}')"
+        fi
+        CSV_ROW+="${CSV_VALUE},"
     fi
 }
 
@@ -216,6 +233,18 @@ _astats_parse(){
     echo -n "${VALUE}"
 }
 
+_csv_parse(){
+    COL="${1}"
+    CSV="${2}"
+    COL_INDEX="$(echo "${CSV}" | sed -n $'1s/,/\\\n/gp' | grep -nx "${COL}" | cut -d: -f1)"
+    if [[ -n "${COL_INDEX}" ]] ; then
+        ROW_VALUE="$(echo "${CSV}" | tail -n +2 | cut -d , -f "${COL_INDEX}")"
+        echo -n "${ROW_VALUE}"
+    else
+        _report -w "A column header ($COL) was expected by not found."
+    fi
+}
+
 _get_iso8601(){
     date +%FT%T
 }
@@ -285,6 +314,8 @@ _get_metadata(){
     } > "${FILTER_REPORT_XMLD}"
     ffprobe -i "${FILENAME}" -show_format -show_streams -of flat 2> /dev/null > "${FFPROBE_REPORT}"
     BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
+    BWFMETAEDIT_TECH="$(bwfmetaedit --out-tech "$FILENAME")"
+    BWFMETAEDIT_CORE="$(bwfmetaedit --out-core "$FILENAME")"
 }
 
 _get_csv_row(){
@@ -292,49 +323,74 @@ _get_csv_row(){
     # FILTER_REPORT, FFPROBE_REPORT, BWFMETAEDIT_REPORT
     unset CSV_ROW
 
+    _get_astats_2channel_offset(){
+        KEY="${1}"
+        VAL_1="$(_astats_parse "${FILTER_REPORT}" "1" "${KEY}")"
+        VAL_2="$(_astats_parse "${FILTER_REPORT}" "2" "${KEY}")"
+        if [[ -n "${VAL_1}" && -n "${VAL_2}" ]] ; then
+            echo "${VAL_1} - ${VAL_2}" | bc
+        fi
+    }
+
     #local math
-    RMS_level_1="$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB")"
-    RMS_level_2="$(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")"
-    if [[ -n "${RMS_level_1}" && -n "${RMS_level_2}" ]] ; then
-        RMS_level_ch_offset="$(echo "$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB") - $(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")" | bc)"
-    else
-        RMS_level_ch_offset=""
-    fi
+    RMS_level_ch_offset="$(_get_astats_2channel_offset "RMS level dB")"
+    dynamic_range_ch_offset="$(_get_astats_2channel_offset "Dynamic range")"
+    noise_floor_db_ch_offset="$(_get_astats_2channel_offset "Noise floor dB")"
+    noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
     #    'ffprobe' to read from FFPROBE_REPORT
+    #    'bwfmetadata' to read from the --out-core or --out-tech request from BWF MetaEdit
     #    'local' to print local key/value pairs
     # 2: if $1=astats the $2 is the channel number or 'Overall'
     #    if $2=ffprobe then $2 is the section: format or streams
+    #    if $1=bwfmetaedit then $2 is the section: Core or Tech
     #    if $1=local then $2 is unused
     # 3: the value or variable to parse from the referenced report
     # 4: if $1=astats then this is a filter for the astats occurrence (blank for primary, astats_6 for astats of the axcorrelation output (the 6th filter))
     #    if $1=local then this is the value for the $3 variable
+    _add_column    local   ""      filename "${BASENAME}"
+    _add_column -f ffprobe format  duration
+    _add_column -f ffprobe streams stream.0.channels
+    _add_column -f ffprobe streams stream.0.codec_name
     _add_column -f astats  1       "Bit depth"
     _add_column -f astats  2       "Bit depth"
-    _add_column    astats  Overall "Bit depth"
-    _add_column    ffprobe streams stream.0.channels
-    _add_column    ffprobe streams stream.0.codec_name
-    _add_column -r "Correlation (via phase)"         astats  lavfi.aphasemeter.phase   "Correlation"
-    _add_column -r "Correlation (via axcorrelation)" astats  1       "DC offset"              "Parsed_astats_6"
-    _add_column    astats  1       "Crest factor"
-    _add_column    astats  2       "Crest factor"
-    _add_column    astats  1       "DC offset"
-    _add_column    astats  2       "DC offset"
-    _add_column -f astats  Overall "DC offset"
-    _add_column    ffprobe format  duration
-    _add_column    astats  1       "Dynamic range"
-    _add_column    astats  2       "Dynamic range"
-    _add_column    local   ""      filename "${BASENAME}"
+    _add_column -f astats  Overall "Bit depth"
+    _add_column -f astats  1       "Crest factor"
+    _add_column -f astats  2       "Crest factor"
+    _add_column -P astats  1       "DC offset"
+    _add_column -P astats  2       "DC offset"
+    _add_column -f -P astats  Overall "DC offset"
+    _add_column -H -r "Correlation (via phase)"        astats  lavfi.aphasemeter.phase   "Correlation"
+    _add_column -f -r "Correlation (via axcorrelation)" astats  1       "DC offset"              "Parsed_astats_6"
+    _add_column -f astats  1       "RMS difference"
+    _add_column -f astats  2       "RMS difference"
+    _add_column -f astats  Overall "RMS difference"
+    _add_column -H astats  1       "RMS level dB"
+    _add_column -H astats  2       "RMS level dB"
+    _add_column -f -H astats  Overall "RMS level dB"
+    _add_column -H local   ""      "RMS level channel offset" "${RMS_level_ch_offset}"
+    _add_column -f astats  1       "RMS peak dB"
+    _add_column -f astats  2       "RMS peak dB"
+    _add_column -f astats  Overall "RMS peak dB"
+    _add_column -f astats  1       "RMS trough dB"
+    _add_column -f astats  2       "RMS trough dB"
+    _add_column -f astats  Overall "RMS trough dB"
+    _add_column -H astats  1       "Dynamic range"
+    _add_column -H astats  2       "Dynamic range"
+    _add_column -H local   ""      "Dynamic range offset" "${dynamic_range_ch_offset}" 2
+    _add_column -H astats  1       "Peak level dB"
+    _add_column -H astats  2       "Peak level dB"
+    _add_column -f -H astats  Overall "Peak level dB"
+    _add_column    astats  1       "Peak count"
+    _add_column    astats  2       "Peak count"
+    _add_column    astats  Overall "Peak count"
     _add_column    astats  1       "Flat factor"
     _add_column    astats  2       "Flat factor"
     _add_column -f astats  Overall "Flat factor"
-    _add_column    astats  1       "Max difference"
-    _add_column    astats  2       "Max difference"
-    _add_column -f astats  Overall "Max difference"
-    _add_column    astats  1       "Max level"
-    _add_column    astats  2       "Max level"
+    _add_column -f astats  1       "Max level"
+    _add_column -f astats  2       "Max level"
     _add_column -f astats  Overall "Max level"
     _add_column -f astats  1       "Mean difference"
     _add_column -f astats  2       "Mean difference"
@@ -342,41 +398,81 @@ _get_csv_row(){
     _add_column -f astats  1       "Min difference"
     _add_column -f astats  2       "Min difference"
     _add_column -f astats  Overall "Min difference"
-    _add_column    astats  1       "Min level"
-    _add_column    astats  2       "Min level"
+    _add_column -f astats  1       "Min level"
+    _add_column -f astats  2       "Min level"
     _add_column -f astats  Overall "Min level"
-    _add_column    astats  1       "Noise floor dB"
-    _add_column    astats  2       "Noise floor dB"
-    _add_column -f astats  Overall "Noise floor dB"
+    _add_column -H astats  1       "Noise floor dB"
+    _add_column -H astats  2       "Noise floor dB"
+    _add_column -f -H astats  Overall "Noise floor dB"
+    _add_column -H local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
     _add_column    astats  1       "Noise floor count"
     _add_column    astats  2       "Noise floor count"
     _add_column -f astats  Overall "Noise floor count"
+    _add_column    local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
+    _add_column    astats  1       "Max difference"
+    _add_column    astats  2       "Max difference"
+    _add_column -f astats  Overall "Max difference"
     _add_column -f astats  Overall "Number of samples"
-    _add_column    astats  1       "Peak count"
-    _add_column    astats  2       "Peak count"
-    _add_column    astats  Overall "Peak count"
-    _add_column    astats  1       "Peak level dB"
-    _add_column    astats  2       "Peak level dB"
-    _add_column -f astats  Overall "Peak level dB"
-    _add_column -f astats  1       "RMS difference"
-    _add_column -f astats  2       "RMS difference"
-    _add_column -f astats  Overall "RMS difference"
-    _add_column    astats  1       "RMS level dB"
-    _add_column    astats  2       "RMS level dB"
-    _add_column -f astats  Overall "RMS level dB"
-    _add_column    local   ""      "RMS level channel offset" "${RMS_level_ch_offset}"
-    _add_column -f astats  1       "RMS peak dB"
-    _add_column -f astats  2       "RMS peak dB"
-    _add_column -f astats  Overall "RMS peak dB"
-    _add_column -f astats  1       "RMS trough dB"
-    _add_column -f astats  2       "RMS trough dB"
-    _add_column -f astats  Overall "RMS trough dB"
-    _add_column    ffprobe streams stream.0.sample_rate
+    _add_column -f ffprobe streams stream.0.sample_rate
     _add_column -f astats  1       "Zero crossings"
     _add_column -f astats  2       "Zero crossings"
     _add_column -f astats  1       "Zero crossings rate"
     _add_column -f astats  2       "Zero crossings rate"
-    _add_column    local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
+    _add_column -f local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
+    _add_column    bwfmetaedit Tech FileName
+    _add_column    bwfmetaedit Tech FileSize
+    _add_column    bwfmetaedit Tech Format
+    _add_column    bwfmetaedit Tech CodecID
+    _add_column    bwfmetaedit Tech Channels
+    _add_column    bwfmetaedit Tech SampleRate
+    _add_column    bwfmetaedit Tech BitRate
+    _add_column    bwfmetaedit Tech BitPerSample
+    _add_column    bwfmetaedit Tech Duration
+    _add_column    bwfmetaedit Tech UnsupportedChunks
+    _add_column    bwfmetaedit Tech bext
+    _add_column    bwfmetaedit Tech INFO
+    _add_column    bwfmetaedit Tech Cue
+    _add_column    bwfmetaedit Tech XMP
+    _add_column    bwfmetaedit Tech aXML
+    _add_column    bwfmetaedit Tech iXML
+    _add_column    bwfmetaedit Tech MD5Stored
+    _add_column    bwfmetaedit Tech MD5Generated
+    _add_column    bwfmetaedit Tech Errors
+    _add_column    bwfmetaedit Tech Warnings
+    _add_column    bwfmetaedit Tech Information
+    _add_column    bwfmetaedit Core FileName
+    _add_column    bwfmetaedit Core Description
+    _add_column    bwfmetaedit Core Originator
+    _add_column    bwfmetaedit Core OriginatorReference
+    _add_column    bwfmetaedit Core OriginationDate
+    _add_column    bwfmetaedit Core OriginationTime
+    _add_column    bwfmetaedit Core "TimeReference (translated)"
+    _add_column    bwfmetaedit Core TimeReference
+    _add_column    bwfmetaedit Core BextVersion
+    _add_column    bwfmetaedit Core UMID
+    _add_column    bwfmetaedit Core LoudnessValue
+    _add_column    bwfmetaedit Core LoudnessRange
+    _add_column    bwfmetaedit Core MaxTruePeakLevel
+    _add_column    bwfmetaedit Core MaxMomentaryLoudness
+    _add_column    bwfmetaedit Core MaxShortTermLoudness
+    _add_column    bwfmetaedit Core CodingHistory
+    _add_column    bwfmetaedit Core IARL
+    _add_column    bwfmetaedit Core IART
+    _add_column    bwfmetaedit Core ICMS
+    _add_column    bwfmetaedit Core ICMT
+    _add_column    bwfmetaedit Core ICOP
+    _add_column    bwfmetaedit Core ICRD
+    _add_column    bwfmetaedit Core IENG
+    _add_column    bwfmetaedit Core IGNR
+    _add_column    bwfmetaedit Core IKEY
+    _add_column    bwfmetaedit Core IMED
+    _add_column    bwfmetaedit Core INAM
+    _add_column    bwfmetaedit Core IPRD
+    _add_column    bwfmetaedit Core ISBJ
+    _add_column    bwfmetaedit Core ISFT
+    _add_column    bwfmetaedit Core ISRC
+    _add_column    bwfmetaedit Core ISRF
+    _add_column    bwfmetaedit Core ITCH
 }
 
 _make_astats_csv_body(){
@@ -447,7 +543,7 @@ _make_graph(){
     # adding 0.5 in the above equation to ensure that the result is rounded to the nearest integer, rather than simply rounded down
     AUDIOFORMAT="aresample=${AUDIO_SAMPLE_RATE},aformat=sample_fmts=dbl,asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
     VERTICAL_MARKINGS=$(echo "${GRAPH_W} / 150" | bc)
-    GRAPH_H="384"
+    GRAPH_H="576"
     PAD_W="240"
 
     unset TIMELINE
@@ -459,20 +555,18 @@ _make_graph(){
         MARK_TIME="$(_ss_to_hhmmss "${MARK}")"
         TIMELINE+=",drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:text='${MARK_TIME}':x=${MARK_X}-text_w:y=(${HEADER_HEIGHT}-${TIMELINE_FONTSIZE})/2"
     done
-    GRAPH_FILTER="asplit=4[j][k][l][m];
+    GRAPH_FILTER="asplit=3[j][k][l];
         `#timeline`
-        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT}${TIMELINE},split=4[top1][top2][top3][top4];
-        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size\: ${AUDIO_FRAME_SIZE}'[Header];
+        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT}${TIMELINE},split=6[top1][top2][top3][top4][top5][top6];
+        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size Displayed\: ${AUDIO_FRAME_SIZE}'[Header];
         `#peak/rms left`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 1 Level, -144 to 0 dBFS, Blue=peak, Yellow=RMS'[peakLH];
         `#peak/rms right`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 2 Level, -144 to 0 dBFS, Purple=peak, Yellow=RMS'[peakRH];
         `#min/max`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Audio Min/Max Level -1...1. Blue=channel 1, Purple=channel 2.'[minmaxH];
         `#phase`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Correlation, -1 to 1'[phaseH];
-        `#axcorrelate`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Normalized Cross Correlation, -1.1 to 1.1 (-1 to 1 with a boundary)'[axcorrelateH];
         `#dc offset`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='DC Offset, -0.01 to 0.01 dBFS offset in the mean displacement from 0'[dcoffH];
-        `#crest`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Crest Factor, -1 to 1 ratio of peak level to RMS level, Blue=Channel 1, Purple=Channel 2`#High levels may indicate prior compression`'[crestH];
-        [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=4[astats1][astats2][astats3][astats4];
+        [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=3[astats1][astats2][astats3];
             [astats1]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Peak_level:fg1=0xFFFF0000:
+                m1=lavfi.astats.1.Peak_level:fg1=0xFFE6D8AD:
                 m2=lavfi.astats.1.RMS_level:fg2=0xFF00FFFF:
                 max=0:min=-144:
                 slide=picture:
@@ -486,52 +580,43 @@ _make_graph(){
                 mode=line:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[peakR1];
             [astats3]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Max_level:fg1=0xFFFF0000:
+                m1=lavfi.astats.1.Max_level:fg1=0xFFE6D8AD:
                 m2=lavfi.astats.2.Max_level:fg2=0xFFFF00FF:
-                m3=lavfi.astats.1.Min_level:fg3=0xFFFF0000:
+                m3=lavfi.astats.1.Min_level:fg3=0xFFE6D8AD:
                 m4=lavfi.astats.2.Min_level:fg4=0xFFFF00FF:
                 min=-1:max=1:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[minmax1];
         [k]${AUDIOFORMAT},astats=metadata=1,adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.DC_offset:fg1=if(gte(VAL\,0.005)\,0xFF0000FF\,if(lte(VAL\,-0.005)\,0xFF0000FF\,0xFF00FF00)):
-                m2=lavfi.astats.2.DC_offset:
+                m1=lavfi.astats.1.DC_offset:fg1=0xFFE6D8AD:
+                m2=lavfi.astats.2.DC_offset:fg2=0xFFFF00FF:
                 min=-0.01:max=0.01:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[dcoff1];
-            [astats4]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Crest_factor:fg1=0xFFFF0000:
-                m2=lavfi.astats.2.Crest_factor:fg2=0xFFFF00FF:
-                max=10:min=0:
-                slide=picture:
-                mode=line:
-                s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[crest1];
         [l]${AUDIOFORMAT},aphasemeter=video=0,
             adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.aphasemeter.phase:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
                 max=1:min=-1:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[phase1];
-        [m]${AUDIOFORMAT},channelsplit,axcorrelate=algo=fast,astats=metadata=1:reset=1,adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Max_level:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
-                min=-1.1:max=1.1:
-                slide=picture:
-                s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[axcorrelate];
         [Header]
-        [top1][peakLH][peakL1][peakRH][peakR1]
-        [top2][minmaxH][minmax1][phaseH][phase1][axcorrelateH][axcorrelate]
-        [top3][dcoffH][dcoff1][crestH][crest1]
-        [top4]vstack=19,drawgrid=thickness=1:color=gray@0.5:width=iw/${VERTICAL_MARKINGS},drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:width=(iw/${VERTICAL_MARKINGS})/10[graph];
+        [top1][peakLH][peakL1]
+        [top2][peakRH][peakR1]
+        [top3][minmaxH][minmax1]
+        [top4][phaseH][phase1]
+        [top5][dcoffH][dcoff1]
+        [top6]vstack=17,drawgrid=thickness=1:color=gray@0.5:width=iw/${VERTICAL_MARKINGS},drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:width=(iw/${VERTICAL_MARKINGS})/10[graph];
         color=c=${BORDER_COLOR}:s=${PAD_W}x${HEADER_HEIGHT_BIG}[HeaderG];
-        color=c=${BORDER_COLOR}:s=${PAD_W}x${HEADER_HEIGHT},split=11[top1G][top2G][top3G][top4G][peakLHG][peakRHG][minmaxHG][phaseHG][axcorrelateHG][dcoffHG][crestHG];
-        `#1-1_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='0',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-0.5',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='+0.5',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2,split=4[minmax1G][phase1G][crest1G][dcoff1G];
-                `#1.1-1.1_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='0',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-0.42',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='+0.42',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2[axcorrelateG];
+        color=c=${BORDER_COLOR}:s=${PAD_W}x${HEADER_HEIGHT},split=11[top1G][top2G][top3G][top4G][top5G][top6G][peakLHG][peakRHG][minmaxHG][phaseHG][dcoffHG];
+        `#1-1_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='0',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-0.5',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='+0.5',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2,split=3[minmax1G][phase1G][dcoff1G];
         `#-144-0_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='-72',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-108',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='-36',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.02:x=w*0.7:text='0',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2,split=2[peakL1G][peakR1G];
         [HeaderG]
-        [top1G][peakLHG][peakL1G][peakRHG][peakR1G]
-        [top2G][minmaxHG][minmax1G][phaseHG][phase1G][axcorrelateHG][axcorrelateG]
-        [top3G][dcoffHG][dcoff1G][crestHG][crest1G]
-        [top4G]vstack=19[grat];
+        [top1G][peakLHG][peakL1G]
+        [top2G][peakRHG][peakR1G]
+        [top3G][minmaxHG][minmax1G]
+        [top4G][phaseHG][phase1G]
+        [top5G][dcoffHG][dcoff1G]
+        [top6G]vstack=17[grat];
         [grat][graph]hstack=2[chart]"
     ffmpeg "${FFMPEG_VERBOSE[@]}" -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
         -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
