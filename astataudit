@@ -325,6 +325,9 @@ _get_csv_row(){
 
     #local math
     RMS_level_ch_offset="$(_get_astats_2channel_offset "RMS level dB")"
+    dynamic_range_ch_offset="$(_get_astats_2channel_offset "Dynamic range")"
+    noise_floor_db_ch_offset="$(_get_astats_2channel_offset "Noise floor dB")"
+    noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
@@ -367,7 +370,7 @@ _get_csv_row(){
     _add_column -f astats  Overall "RMS trough dB"
     _add_column    astats  1       "Dynamic range"
     _add_column    astats  2       "Dynamic range"
-    
+    _add_column    local   ""      "Dynamic range offset" "${dynamic_range_ch_offset}"
     _add_column    astats  1       "Peak level dB"
     _add_column    astats  2       "Peak level dB"
     _add_column -f astats  Overall "Peak level dB"
@@ -392,9 +395,11 @@ _get_csv_row(){
     _add_column    astats  1       "Noise floor dB"
     _add_column    astats  2       "Noise floor dB"
     _add_column -f astats  Overall "Noise floor dB"
+    _add_column    local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
     _add_column    astats  1       "Noise floor count"
     _add_column    astats  2       "Noise floor count"
     _add_column -f astats  Overall "Noise floor count"
+    _add_column    local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
     _add_column    astats  1       "Max difference"
     _add_column    astats  2       "Max difference"
     _add_column -f astats  Overall "Max difference"
