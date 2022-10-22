@@ -103,6 +103,8 @@ _add_column(){
                 else
                     CSV_HEADER+="${KEY// /_}_${SECTION},"
                 fi
+            elif [[ "${REPORT_SOURCE}" = "bwfmetaedit" ]] ; then
+                 CSV_HEADER+="${KEY} (BWFME ${SECTION}),"
             elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
                 CSV_HEADER+="${KEY},"
             fi
@@ -114,6 +116,12 @@ _add_column(){
                 CSV_ROW+="$(grep "${SECTION}=" "${FILTER_REPORT}" | cut -d "=" -f2 | awk '{s+=$1}END{print s/NR}'),"
             else
                 CSV_ROW+="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}" "${VALUE}"),"
+            fi
+        elif [[ "${REPORT_SOURCE}" = "bwfmetaedit" ]] ; then
+            if [[ "${SECTION}" = "Core" ]] ; then
+                CSV_ROW+="$(_csv_parse "${KEY}" "${BWFMETAEDIT_CORE}"),"
+            elif [[ "${SECTION}" = "Tech" ]] ; then
+                CSV_ROW+="$(_csv_parse "${KEY}" "${BWFMETAEDIT_TECH}"),"
             fi
         elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
             CSV_ROW+="${VALUE},"
@@ -216,6 +224,18 @@ _astats_parse(){
     echo -n "${VALUE}"
 }
 
+_csv_parse(){
+    COL="${1}"
+    CSV="${2}"
+    COL_INDEX="$(echo "${CSV}" | sed -n $'1s/,/\\\n/gp' | grep -nx "${COL}" | cut -d: -f1)"
+    if [[ -n "${COL_INDEX}" ]] ; then
+        ROW_VALUE="$(echo "${CSV}" | tail -n +2 | cut -d , -f "${COL_INDEX}")"
+        echo -n "${ROW_VALUE}"
+    else
+        _report -w "A column header ($COL) was expected by not found."
+    fi
+}
+
 _get_iso8601(){
     date +%FT%T
 }
@@ -285,6 +305,8 @@ _get_metadata(){
     } > "${FILTER_REPORT_XMLD}"
     ffprobe -i "${FILENAME}" -show_format -show_streams -of flat 2> /dev/null > "${FFPROBE_REPORT}"
     BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
+    BWFMETAEDIT_TECH="$(bwfmetaedit --out-tech "$FILENAME")"
+    BWFMETAEDIT_CORE="$(bwfmetaedit --out-core "$FILENAME")"
 }
 
 _get_csv_row(){
@@ -304,9 +326,11 @@ _get_csv_row(){
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
     #    'ffprobe' to read from FFPROBE_REPORT
+    #    'bwfmetadata' to read from the --out-core or --out-tech request from BWF MetaEdit
     #    'local' to print local key/value pairs
     # 2: if $1=astats the $2 is the channel number or 'Overall'
     #    if $2=ffprobe then $2 is the section: format or streams
+    #    if $1=bwfmetaedit then $2 is the section: Core or Tech
     #    if $1=local then $2 is unused
     # 3: the value or variable to parse from the referenced report
     # 4: if $1=astats then this is a filter for the astats occurrence (blank for primary, astats_6 for astats of the axcorrelation output (the 6th filter))
@@ -377,6 +401,60 @@ _get_csv_row(){
     _add_column -f astats  1       "Zero crossings rate"
     _add_column -f astats  2       "Zero crossings rate"
     _add_column    local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
+    _add_column    bwfmetaedit Tech FileName
+    _add_column    bwfmetaedit Tech FileSize
+    _add_column    bwfmetaedit Tech Format
+    _add_column    bwfmetaedit Tech CodecID
+    _add_column    bwfmetaedit Tech Channels
+    _add_column    bwfmetaedit Tech SampleRate
+    _add_column    bwfmetaedit Tech BitRate
+    _add_column    bwfmetaedit Tech BitPerSample
+    _add_column    bwfmetaedit Tech Duration
+    _add_column    bwfmetaedit Tech UnsupportedChunks
+    _add_column    bwfmetaedit Tech bext
+    _add_column    bwfmetaedit Tech INFO
+    _add_column    bwfmetaedit Tech Cue
+    _add_column    bwfmetaedit Tech XMP
+    _add_column    bwfmetaedit Tech aXML
+    _add_column    bwfmetaedit Tech iXML
+    _add_column    bwfmetaedit Tech MD5Stored
+    _add_column    bwfmetaedit Tech MD5Generated
+    _add_column    bwfmetaedit Tech Errors
+    _add_column    bwfmetaedit Tech Warnings
+    _add_column    bwfmetaedit Tech Information
+    _add_column    bwfmetaedit Core FileName
+    _add_column    bwfmetaedit Core Description
+    _add_column    bwfmetaedit Core Originator
+    _add_column    bwfmetaedit Core OriginatorReference
+    _add_column    bwfmetaedit Core OriginationDate
+    _add_column    bwfmetaedit Core OriginationTime
+    _add_column    bwfmetaedit Core "TimeReference (translated)"
+    _add_column    bwfmetaedit Core TimeReference
+    _add_column    bwfmetaedit Core BextVersion
+    _add_column    bwfmetaedit Core UMID
+    _add_column    bwfmetaedit Core LoudnessValue
+    _add_column    bwfmetaedit Core LoudnessRange
+    _add_column    bwfmetaedit Core MaxTruePeakLevel
+    _add_column    bwfmetaedit Core MaxMomentaryLoudness
+    _add_column    bwfmetaedit Core MaxShortTermLoudness
+    _add_column    bwfmetaedit Core CodingHistory
+    _add_column    bwfmetaedit Core IARL
+    _add_column    bwfmetaedit Core IART
+    _add_column    bwfmetaedit Core ICMS
+    _add_column    bwfmetaedit Core ICMT
+    _add_column    bwfmetaedit Core ICOP
+    _add_column    bwfmetaedit Core ICRD
+    _add_column    bwfmetaedit Core IENG
+    _add_column    bwfmetaedit Core IGNR
+    _add_column    bwfmetaedit Core IKEY
+    _add_column    bwfmetaedit Core IMED
+    _add_column    bwfmetaedit Core INAM
+    _add_column    bwfmetaedit Core IPRD
+    _add_column    bwfmetaedit Core ISBJ
+    _add_column    bwfmetaedit Core ISFT
+    _add_column    bwfmetaedit Core ISRC
+    _add_column    bwfmetaedit Core ISRF
+    _add_column    bwfmetaedit Core ITCH
 }
 
 _make_astats_csv_body(){
