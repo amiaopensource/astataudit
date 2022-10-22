@@ -78,10 +78,12 @@ _add_column(){
     IF_FULL="n"
     unset RELABEL
     OPTIND=1
-    while getopts "fr:" opt ; do
+    while getopts "fr:PH" opt ; do
         case "${opt}" in
             f) IF_FULL="y" ;;
             r) RELABEL="${OPTARG}" ;;
+            P) AS_PERCENT="Y" ;;
+            H) ROUND="Y" ;;
             *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
         esac
@@ -128,6 +130,11 @@ _add_column(){
         else
             _report -w "Unexpected error in _add_column, REPORT_SOURCE=(${REPORT_SOURCE}), SECTION=(${SECTION}), KEY=(${KEY})"
             CSV_VALUE=""
+        fi
+        if [[ "${AS_PERCENT}" == "Y" ]] ; then
+            CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f%%\n", $1 * 100}')"
+        elif [[ "${ROUND}" == "Y" ]] ; then
+            CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f"}')"
         fi
         CSV_ROW+="${CSV_VALUE},"
     fi
@@ -352,30 +359,30 @@ _get_csv_row(){
     _add_column -f astats  Overall "Bit depth"
     _add_column -f astats  1       "Crest factor"
     _add_column -f astats  2       "Crest factor"
-    _add_column    astats  1       "DC offset"
-    _add_column    astats  2       "DC offset"
-    _add_column -f astats  Overall "DC offset"
-    _add_column -r "Correlation (via phase)"         astats  lavfi.aphasemeter.phase   "Correlation"
+    _add_column -P astats  1       "DC offset"
+    _add_column -P astats  2       "DC offset"
+    _add_column -f -P astats  Overall "DC offset"
+    _add_column -H -r "Correlation (via phase)"        astats  lavfi.aphasemeter.phase   "Correlation"
     _add_column -f -r "Correlation (via axcorrelation)" astats  1       "DC offset"              "Parsed_astats_6"
     _add_column -f astats  1       "RMS difference"
     _add_column -f astats  2       "RMS difference"
     _add_column -f astats  Overall "RMS difference"
-    _add_column    astats  1       "RMS level dB"
-    _add_column    astats  2       "RMS level dB"
-    _add_column -f astats  Overall "RMS level dB"
-    _add_column    local   ""      "RMS level channel offset" "${RMS_level_ch_offset}"
+    _add_column -H astats  1       "RMS level dB"
+    _add_column -H astats  2       "RMS level dB"
+    _add_column -f -H astats  Overall "RMS level dB"
+    _add_column -H local   ""      "RMS level channel offset" "${RMS_level_ch_offset}"
     _add_column -f astats  1       "RMS peak dB"
     _add_column -f astats  2       "RMS peak dB"
     _add_column -f astats  Overall "RMS peak dB"
     _add_column -f astats  1       "RMS trough dB"
     _add_column -f astats  2       "RMS trough dB"
     _add_column -f astats  Overall "RMS trough dB"
-    _add_column    astats  1       "Dynamic range"
-    _add_column    astats  2       "Dynamic range"
-    _add_column    local   ""      "Dynamic range offset" "${dynamic_range_ch_offset}"
-    _add_column    astats  1       "Peak level dB"
-    _add_column    astats  2       "Peak level dB"
-    _add_column -f astats  Overall "Peak level dB"
+    _add_column -H astats  1       "Dynamic range"
+    _add_column -H astats  2       "Dynamic range"
+    _add_column -H local   ""      "Dynamic range offset" "${dynamic_range_ch_offset}" 2
+    _add_column -H astats  1       "Peak level dB"
+    _add_column -H astats  2       "Peak level dB"
+    _add_column -f -H astats  Overall "Peak level dB"
     _add_column    astats  1       "Peak count"
     _add_column    astats  2       "Peak count"
     _add_column    astats  Overall "Peak count"
@@ -394,10 +401,10 @@ _get_csv_row(){
     _add_column -f astats  1       "Min level"
     _add_column -f astats  2       "Min level"
     _add_column -f astats  Overall "Min level"
-    _add_column    astats  1       "Noise floor dB"
-    _add_column    astats  2       "Noise floor dB"
-    _add_column -f astats  Overall "Noise floor dB"
-    _add_column    local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
+    _add_column -H astats  1       "Noise floor dB"
+    _add_column -H astats  2       "Noise floor dB"
+    _add_column -f -H astats  Overall "Noise floor dB"
+    _add_column -H local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
     _add_column    astats  1       "Noise floor count"
     _add_column    astats  2       "Noise floor count"
     _add_column -f astats  Overall "Noise floor count"
