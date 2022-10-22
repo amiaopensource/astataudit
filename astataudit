@@ -314,14 +314,17 @@ _get_csv_row(){
     # FILTER_REPORT, FFPROBE_REPORT, BWFMETAEDIT_REPORT
     unset CSV_ROW
 
+    _get_astats_2channel_offset(){
+        KEY="${1}"
+        VAL_1="$(_astats_parse "${FILTER_REPORT}" "1" "${KEY}")"
+        VAL_2="$(_astats_parse "${FILTER_REPORT}" "2" "${KEY}")"
+        if [[ -n "${VAL_1}" && -n "${VAL_2}" ]] ; then
+            echo "${VAL_1} - ${VAL_2}" | bc
+        fi
+    }
+
     #local math
-    RMS_level_1="$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB")"
-    RMS_level_2="$(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")"
-    if [[ -n "${RMS_level_1}" && -n "${RMS_level_2}" ]] ; then
-        RMS_level_ch_offset="$(echo "$(_astats_parse "${FILTER_REPORT}" "1" "RMS level dB") - $(_astats_parse "${FILTER_REPORT}" "2" "RMS level dB")" | bc)"
-    else
-        RMS_level_ch_offset=""
-    fi
+    RMS_level_ch_offset="$(_get_astats_2channel_offset "RMS level dB")"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
