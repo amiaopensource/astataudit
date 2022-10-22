@@ -566,7 +566,7 @@ _make_graph(){
         `#dc offset`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='DC Offset, -0.01 to 0.01 dBFS offset in the mean displacement from 0'[dcoffH];
         [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=3[astats1][astats2][astats3];
             [astats1]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Peak_level:fg1=0xFFFF0000:
+                m1=lavfi.astats.1.Peak_level:fg1=0xFFE6D8AD:
                 m2=lavfi.astats.1.RMS_level:fg2=0xFF00FFFF:
                 max=0:min=-144:
                 slide=picture:
@@ -580,16 +580,16 @@ _make_graph(){
                 mode=line:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[peakR1];
             [astats3]adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.Max_level:fg1=0xFFFF0000:
+                m1=lavfi.astats.1.Max_level:fg1=0xFFE6D8AD:
                 m2=lavfi.astats.2.Max_level:fg2=0xFFFF00FF:
-                m3=lavfi.astats.1.Min_level:fg3=0xFFFF0000:
+                m3=lavfi.astats.1.Min_level:fg3=0xFFE6D8AD:
                 m4=lavfi.astats.2.Min_level:fg4=0xFFFF00FF:
                 min=-1:max=1:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[minmax1];
         [k]${AUDIOFORMAT},astats=metadata=1,adrawgraph=${DRAWGRAPH_SETTINGS}:
-                m1=lavfi.astats.1.DC_offset:fg1=if(gte(VAL\,0.005)\,0xFF0000FF\,if(lte(VAL\,-0.005)\,0xFF0000FF\,0xFF00FF00)):
-                m2=lavfi.astats.2.DC_offset:
+                m1=lavfi.astats.1.DC_offset:fg1=0xFFE6D8AD:
+                m2=lavfi.astats.2.DC_offset:fg2=0xFFFF00FF:
                 min=-0.01:max=0.01:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[dcoff1];
