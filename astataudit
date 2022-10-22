@@ -558,7 +558,7 @@ _make_graph(){
     GRAPH_FILTER="asplit=3[j][k][l];
         `#timeline`
         color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT}${TIMELINE},split=4[top1][top2][top3][top4];
-        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size\: ${AUDIO_FRAME_SIZE}'[Header];
+        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size Displayed\: ${AUDIO_FRAME_SIZE}'[Header];
         `#peak/rms left`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 1 Level, -144 to 0 dBFS, Blue=peak, Yellow=RMS'[peakLH];
         `#peak/rms right`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 2 Level, -144 to 0 dBFS, Purple=peak, Yellow=RMS'[peakRH];
         `#min/max`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Audio Min/Max Level -1...1. Blue=channel 1, Purple=channel 2.'[minmaxH];
