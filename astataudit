@@ -9,11 +9,13 @@ Provide visual and information reporting on audio files.
 Usage:
     ${THIS_NAME} [options] file1.wav [file2.wav ...]
     or
+    ${THIS_NAME} [options] list_of_wave_filepaths_to_process.txt
+    or
     ${THIS_NAME} [options] directory/
 
-The input can be a list of files or a directory of audio files. If the input is
-a directory, then ${THIS_NAME} will review all audio files immediately within
-that directory.
+The input can be a list of files, a text document that contains a list of files
+or a directory of audio files. If the input is a directory, then ${THIS_NAME}
+will review all audio files immediately within that directory.
 
 Options:
     By analyzing audio files, ${THIS_NAME} will provide the following outputs.
@@ -697,7 +699,9 @@ CSV_ROW=""
 INPUT="$1"
 FFPROBE_SETTINGS=(-of xml=x=1:q=1 -noprivate -show_format -show_streams -show_chapters)
 NOW="$(_get_iso8601_c)"
-if [[ -f "${INPUT}" ]] ; then
+INPUT_EXT="${INPUT##*.}"
+
+if [[ -f "${INPUT}" && "${INPUT_EXT}" != "txt" ]] ; then
     _report -d "${THIS_NAME} will process this list of files: ${@}"
     OUTPUT_CSV="astatsaudit_${NOW}.csv"
     while [[ "${@}" != "" ]] ; do
@@ -722,7 +726,7 @@ if [[ -f "${INPUT}" ]] ; then
         fi
         shift
     done
-elif [[ -d "${INPUT}" ]] ; then
+elif [[ -d "${INPUT}" || ( -f "${INPUT}" && "${INPUT_EXT}" == "txt" ) ]] ; then
     if [[ -n "${SET_OUTPUT_DIR}" ]] ; then
         OUTPUT_DIR="${SET_OUTPUT_DIR}"
     else
@@ -739,6 +743,7 @@ elif [[ -d "${INPUT}" ]] ; then
     OUTPUT_XML="${OUTPUT_DIR}/astatsaudit_${NOW}.xml"
     OUTPUT_CSV="${OUTPUT_DIR}/astatsaudit_${NOW}.csv"
     echo "<files>" > "${FILES_XML_TMP}"
+    if [[ -d "${INPUT}" ]] ; then
     while read FILE ; do
         IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
         if [[ "${IS_AUDIO}" = "audio" ]] ; then
@@ -748,6 +753,17 @@ elif [[ -d "${INPUT}" ]] ; then
             _report -d "Skipping: ${FILE} (no audio stream found)"
         fi
     done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
+    else
+        while read FILE ; do
+            IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
+            if [[ "${IS_AUDIO}" = "audio" ]] ; then
+                _process_file -o "${OUTPUT_DIR}" "${FILE}"
+                ((FILE_NUMBER++))
+            else
+                _report -d "Skipping: ${FILE} (no audio stream found)"
+            fi
+        done < "${INPUT}"
+    fi
     echo "</files>" >> "${FILES_XML_TMP}"
     if [[ "${XML_OUTPUT}" = "y" ]] ; then
         _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
