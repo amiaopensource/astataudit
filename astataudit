@@ -744,15 +744,15 @@ elif [[ -d "${INPUT}" || ( -f "${INPUT}" && "${INPUT_EXT}" == "txt" ) ]] ; then
     OUTPUT_CSV="${OUTPUT_DIR}/astatsaudit_${NOW}.csv"
     echo "<files>" > "${FILES_XML_TMP}"
     if [[ -d "${INPUT}" ]] ; then
-    while read FILE ; do
-        IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
-        if [[ "${IS_AUDIO}" = "audio" ]] ; then
-            _process_file -o "${OUTPUT_DIR}" "${FILE}"
-            ((FILE_NUMBER++))
-        else
-            _report -d "Skipping: ${FILE} (no audio stream found)"
-        fi
-    done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
+        while read FILE ; do
+            IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
+            if [[ "${IS_AUDIO}" = "audio" ]] ; then
+                _process_file -o "${OUTPUT_DIR}" "${FILE}"
+                ((FILE_NUMBER++))
+            else
+                _report -d "Skipping: ${FILE} (no audio stream found)"
+            fi
+        done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
     else
         while read FILE ; do
             IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
