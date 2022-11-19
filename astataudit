@@ -604,7 +604,7 @@ _make_graph(){
         [l]${AUDIOFORMAT},asubcut=order=6:cutoff=25,aphasemeter=video=0,
             adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.aphasemeter.phase:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
-                max=1:min=-1:
+                max=1.01:min=-1:
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[phase1];
         [Header]
