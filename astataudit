@@ -489,8 +489,8 @@ _make_astats_csv(){
     while getopts "o:" opt ; do
         case "${opt}" in
             o) OUTPUT_DIR="${OPTARG}" ;;
-            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         esac
     done
     shift "$((OPTIND-1))"
@@ -640,8 +640,8 @@ _process_file(){
     while getopts "o:" opt ; do
         case "${opt}" in
             o) OUTPUT_DIR="${OPTARG}" ;;
-            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         esac
     done
     shift "$((OPTIND-1))"
