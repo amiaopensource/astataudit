@@ -358,7 +358,6 @@ _get_csv_row(){
     _add_column -f ffprobe streams stream.0.codec_name
     _add_column -f astats  1       "Bit depth"
     _add_column -f astats  2       "Bit depth"
-    _add_column -f astats  Overall "Bit depth"
     _add_column -f astats  1       "Crest factor"
     _add_column -f astats  2       "Crest factor"
     _add_column -P astats  1       "DC offset"
@@ -429,6 +428,7 @@ _get_csv_row(){
     _add_column    bwfmetaedit Tech SampleRate
     _add_column    bwfmetaedit Tech BitRate
     _add_column    bwfmetaedit Tech BitPerSample
+    _add_column    astats  Overall "Bit depth"
     _add_column    bwfmetaedit Tech Duration
     _add_column    bwfmetaedit Tech UnsupportedChunks
     _add_column    bwfmetaedit Tech bext
