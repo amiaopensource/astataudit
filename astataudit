@@ -207,7 +207,7 @@ _flat_ffprobe_parse(){
     KEY="${2}"
     VALUE="$(grep "^${KEY}=" "${FFPROBE_DOC}" | cut -d "=" -f2- | sed -e 's/^"//' -e 's/"$//')"
     VALUE_LINE_COUNT="$(echo -n "${VALUE}" | grep -c '^')"
-    if [[ "${VALUE_LINE_COUNT}" > 1 ]] ; then
+    if [[ "${VALUE_LINE_COUNT}" -gt 1 ]] ; then
         _report -w "The parsed value for '${KEY}' is in ${VALUE_LINE_COUNT} lines, which may be unintended"
     fi
     echo -n "${VALUE}"
@@ -229,7 +229,7 @@ _astats_parse(){
         VALUE="$(grep "${FILTER_PREFIX}" "${ASTATS_DOC}" | sed -n "s/Overall$/Channel: X/g;/Channel: ${SECTION}/,/Channel/p" | grep "] ${KEY}:" | cut -d : -f2- | sed 's/ //g')"
     fi
     VALUE_LINE_COUNT="$(echo -n "${VALUE}" | grep -c '^')"
-    if [[ "${VALUE_LINE_COUNT}" > 1 ]] ; then
+    if [[ "${VALUE_LINE_COUNT}" -gt 1 ]] ; then
         _report -w "The parsed value for '${KEY}' is in ${VALUE_LINE_COUNT} lines, which may be unintended"
     fi
     echo -n "${VALUE}"
