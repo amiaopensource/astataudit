@@ -64,8 +64,8 @@ while getopts "hvc:f:x:g:o:X" opt ; do
         g) GRAPH_OUTPUT="${OPTARG}" ;;
         o) SET_OUTPUT_DIR="${OPTARG}" ;;
         X) FULL_DATA="y" ;;
-        *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
     esac
 done
 shift "$((OPTIND-1))"
@@ -86,8 +86,8 @@ _add_column(){
             r) RELABEL="${OPTARG}" ;;
             P) AS_PERCENT="Y" ;;
             H) ROUND="Y" ;;
-            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         esac
     done
     shift "$((OPTIND-1))"
@@ -532,8 +532,8 @@ _make_graph(){
     while getopts "o:" opt ; do
         case "${opt}" in
             o) OUTPUT_DIR="${OPTARG}" ;;
-            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         esac
     done
     shift "$((OPTIND-1))"
