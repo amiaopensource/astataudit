@@ -324,18 +324,18 @@ _get_metadata(){
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
     if [[ "${XML_OUTPUT}" = "y" ]] ; then
-    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=65536:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
-    {
-        echo "<astats>"
-        grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
-        echo "</astats>"
-    } > "${FILTER_REPORT_XMLD}"
+        ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=65536:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+        {
+            echo "<astats>"
+            grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
+            echo "</astats>"
+        } > "${FILTER_REPORT_XMLD}"
     fi
     ffprobe -i "${FILENAME}" -show_format -show_streams -of flat 2> /dev/null > "${FFPROBE_REPORT}"
     if [[ "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
-    BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
-    BWFMETAEDIT_TECH="$(bwfmetaedit --out-tech "$FILENAME")"
-    BWFMETAEDIT_XML="$(bwfmetaedit --out-xml "${FILENAME}")"
+        BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
+        BWFMETAEDIT_TECH="$(bwfmetaedit --out-tech "$FILENAME")"
+        BWFMETAEDIT_XML="$(bwfmetaedit --out-xml "${FILENAME}")"
     fi
 }
 
@@ -738,7 +738,7 @@ if [[ -f "${INPUT}" && "${INPUT_EXT}" != "txt" ]] ; then
                 _process_file "${INPUT}"
             fi
             if [[ "${XML_OUTPUT}" = "y" ]] ; then
-            _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
+                _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
             fi
             ((FILE_NUMBER++))
         else
