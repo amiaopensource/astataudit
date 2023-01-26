@@ -323,7 +323,7 @@ _get_metadata(){
     FILTER_REPORT="$(_maketemp)"
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
-    if [[ "${XML_OUTPUT}" = "y" ]] ; then
+    if [[ "${XML_OUTPUT}" = "y" || "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
         ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=65536:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
         {
             echo "<astats>"
