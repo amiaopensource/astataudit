@@ -35,6 +35,9 @@ Options:
  -x (y|n)  (Enable xml output, default 'y')
  -g (y|n)  (Enable graph output, default 'y')
 
+ -m MIN    (if MIN is set, then the graph output will be in one image for each set of specified
+           minutes of the timeline, otherwise the output will be in one image)
+
  -o DIR    (Send output files to the specified directory. Default is a directory next to the input.)
 
  -X        (By default the file summary csv will contain a core set of
@@ -54,7 +57,8 @@ CSV_FRAMES_OUTPUT="y"
 XML_OUTPUT="y"
 GRAPH_OUTPUT="y"
 FULL_DATA="n"
-while getopts "hvc:f:x:g:o:X" opt ; do
+SAMPLES_PER_ASTATS_CSV="65536"
+while getopts "hvc:f:x:g:o:Xm:" opt ; do
     case "${opt}" in
         h) _usage ; exit ;;
         v) VERBOSE=true ;;
@@ -64,8 +68,9 @@ while getopts "hvc:f:x:g:o:X" opt ; do
         g) GRAPH_OUTPUT="${OPTARG}" ;;
         o) SET_OUTPUT_DIR="${OPTARG}" ;;
         X) FULL_DATA="y" ;;
-        *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+        m) GRAPH_MINUTES_SET="${OPTARG}" ;;
         :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+        *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
     esac
 done
 shift "$((OPTIND-1))"
@@ -86,8 +91,8 @@ _add_column(){
             r) RELABEL="${OPTARG}" ;;
             P) AS_PERCENT="Y" ;;
             H) ROUND="Y" ;;
-            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         esac
     done
     shift "$((OPTIND-1))"
@@ -108,9 +113,9 @@ _add_column(){
                     CSV_HEADER+="${KEY// /_}_${SECTION},"
                 fi
             elif [[ "${REPORT_SOURCE}" = "bwfmetaedit" ]] ; then
-                 CSV_HEADER+="${KEY} (BWFME ${SECTION}),"
+                 CSV_HEADER+="${KEY##*/} (BWFME ${SECTION}),"
             elif [[ "${REPORT_SOURCE}" = "local" ]] ; then
-                CSV_HEADER+="${KEY},"
+                CSV_HEADER+="$(basename "${KEY}"),"
             fi
         fi
         if [[ "${REPORT_SOURCE}" = "ffprobe" ]] ; then
@@ -122,8 +127,13 @@ _add_column(){
                 CSV_VALUE="$(_astats_parse "${FILTER_REPORT}" "${SECTION}" "${KEY}" "${VALUE}")"
             fi
         elif [[ "${REPORT_SOURCE}" = "bwfmetaedit" ]] ; then
-            if [[ "${SECTION}" = "Core" ]] ; then
-                CSV_VALUE="$(_csv_parse "${KEY}" "${BWFMETAEDIT_CORE}")"
+            if [[ "${KEY}" == *"/"* ]]; then
+                PARSE_FULL_XML="Y"
+            else
+                PARSE_FULL_XML="N"
+            fi
+            if [[ "${SECTION}" = "Core" || "${PARSE_FULL_XML}" = "Y" ]] ; then
+                CSV_VALUE="$(_xml_parse "${KEY}" "${BWFMETAEDIT_XML}")"
             elif [[ "${SECTION}" = "Tech" ]] ; then
                 CSV_VALUE="$(_csv_parse "${KEY}" "${BWFMETAEDIT_TECH}")"
             fi
@@ -137,6 +147,10 @@ _add_column(){
             CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f%%", $1 * 100}')"
         elif [[ "${ROUND}" == "Y" && -n "${CSV_VALUE}" ]] ; then
             CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f", $1}')"
+        fi
+        CSV_VALUE="$(echo "${CSV_VALUE}" | sed 's|"|\\"|g')"
+        if [[ "$(echo "${CSV_VALUE}" | grep -c '$')" != 1 || "${CSV_VALUE}" == *","* ]] ; then
+            CSV_VALUE="\"${CSV_VALUE}\""
         fi
         CSV_ROW+="${CSV_VALUE},"
     fi
@@ -247,6 +261,12 @@ _csv_parse(){
     fi
 }
 
+_xml_parse(){
+    PATH="${1}"
+    XML="${2}"
+    echo "${XML}" | "${XMLSTARLET_PATH}" sel -t -m "/conformance_point_document" -v "${PATH}" -n
+}
+
 _get_iso8601(){
     date +%FT%T
 }
@@ -308,16 +328,20 @@ _get_metadata(){
     FILTER_REPORT="$(_maketemp)"
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
-    ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=65536:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
-    {
-        echo "<astats>"
-        grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
-        echo "</astats>"
-    } > "${FILTER_REPORT_XMLD}"
+    if [[ "${XML_OUTPUT}" = "y" || "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
+        ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+        {
+            echo "<astats>"
+            grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
+            echo "</astats>"
+        } > "${FILTER_REPORT_XMLD}"
+    fi
     ffprobe -i "${FILENAME}" -show_format -show_streams -of flat 2> /dev/null > "${FFPROBE_REPORT}"
-    BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
-    BWFMETAEDIT_TECH="$(bwfmetaedit --out-tech "$FILENAME")"
-    BWFMETAEDIT_CORE="$(bwfmetaedit --out-core "$FILENAME")"
+    if [[ "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
+        BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
+        BWFMETAEDIT_TECH="$(bwfmetaedit --out-tech "$FILENAME")"
+        BWFMETAEDIT_XML="$(bwfmetaedit --out-xml "${FILENAME}")"
+    fi
 }
 
 _get_csv_row(){
@@ -339,6 +363,8 @@ _get_csv_row(){
     dynamic_range_ch_offset="$(_get_astats_2channel_offset "Dynamic range")"
     noise_floor_db_ch_offset="$(_get_astats_2channel_offset "Noise floor dB")"
     noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
+    NOISE_FLOOR_1_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "1" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
+    NOISE_FLOOR_2_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "2" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
@@ -407,7 +433,9 @@ _get_csv_row(){
     _add_column -f -H astats  Overall "Noise floor dB"
     _add_column -H local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
     _add_column    astats  1       "Noise floor count"
+    _add_column    local   ""      "Noise_floor_duration_1" "${NOISE_FLOOR_1_DURATION}"
     _add_column    astats  2       "Noise floor count"
+    _add_column    local   ""      "Noise_floor_duration_2" "${NOISE_FLOOR_2_DURATION}"
     _add_column -f astats  Overall "Noise floor count"
     _add_column    local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
     _add_column    astats  1       "Max difference"
@@ -420,61 +448,60 @@ _get_csv_row(){
     _add_column -f astats  1       "Zero crossings rate"
     _add_column -f astats  2       "Zero crossings rate"
     _add_column -f local   ""      bwfmetaedit "${BWFMETAEDIT_REPORT}"
-    _add_column    bwfmetaedit Tech FileName
-    _add_column    bwfmetaedit Tech FileSize
-    _add_column    bwfmetaedit Tech Format
-    _add_column    bwfmetaedit Tech CodecID
-    _add_column    bwfmetaedit Tech Channels
-    _add_column    bwfmetaedit Tech SampleRate
-    _add_column    bwfmetaedit Tech BitRate
-    _add_column    bwfmetaedit Tech BitPerSample
+    _add_column    bwfmetaedit Tech File/Technical/FileName
+    _add_column    bwfmetaedit Tech File/Technical/FileSize
+    _add_column    bwfmetaedit Tech File/Technical/Format
+    _add_column    bwfmetaedit Tech File/Technical/CodecID
+    _add_column    bwfmetaedit Tech File/Technical/Channels
+    _add_column    bwfmetaedit Tech File/Technical/SampleRate
+    _add_column    bwfmetaedit Tech File/Technical/BitRate
+    _add_column    bwfmetaedit Tech File/Technical/BitPerSample
     _add_column    astats  Overall "Bit depth"
-    _add_column    bwfmetaedit Tech Duration
+    _add_column    bwfmetaedit Tech File/Technical/Duration
     _add_column    bwfmetaedit Tech UnsupportedChunks
-    _add_column    bwfmetaedit Tech bext
-    _add_column    bwfmetaedit Tech INFO
-    _add_column    bwfmetaedit Tech Cue
-    _add_column    bwfmetaedit Tech XMP
-    _add_column    bwfmetaedit Tech aXML
-    _add_column    bwfmetaedit Tech iXML
-    _add_column    bwfmetaedit Tech MD5Stored
+    _add_column    bwfmetaedit Tech File/Technical/bext
+    _add_column    bwfmetaedit Tech File/Technical/INFO
+    _add_column    bwfmetaedit Tech File/Technical/Cue
+    _add_column    bwfmetaedit Tech File/Technical/XMP
+    _add_column    bwfmetaedit Tech File/Technical/aXML
+    _add_column    bwfmetaedit Tech File/Technical/iXML
+    _add_column    bwfmetaedit Tech File/Technical/MD5Stored
     _add_column    bwfmetaedit Tech MD5Generated
     _add_column    bwfmetaedit Tech Errors
     _add_column    bwfmetaedit Tech Warnings
-    _add_column    bwfmetaedit Tech Information
-    _add_column    bwfmetaedit Core FileName
-    _add_column    bwfmetaedit Core Description
-    _add_column    bwfmetaedit Core Originator
-    _add_column    bwfmetaedit Core OriginatorReference
-    _add_column    bwfmetaedit Core OriginationDate
-    _add_column    bwfmetaedit Core OriginationTime
-    _add_column    bwfmetaedit Core "TimeReference (translated)"
-    _add_column    bwfmetaedit Core TimeReference
-    _add_column    bwfmetaedit Core BextVersion
-    _add_column    bwfmetaedit Core UMID
-    _add_column    bwfmetaedit Core LoudnessValue
-    _add_column    bwfmetaedit Core LoudnessRange
-    _add_column    bwfmetaedit Core MaxTruePeakLevel
-    _add_column    bwfmetaedit Core MaxMomentaryLoudness
-    _add_column    bwfmetaedit Core MaxShortTermLoudness
-    _add_column    bwfmetaedit Core CodingHistory
-    _add_column    bwfmetaedit Core IARL
-    _add_column    bwfmetaedit Core IART
-    _add_column    bwfmetaedit Core ICMS
-    _add_column    bwfmetaedit Core ICMT
-    _add_column    bwfmetaedit Core ICOP
-    _add_column    bwfmetaedit Core ICRD
-    _add_column    bwfmetaedit Core IENG
-    _add_column    bwfmetaedit Core IGNR
-    _add_column    bwfmetaedit Core IKEY
-    _add_column    bwfmetaedit Core IMED
-    _add_column    bwfmetaedit Core INAM
-    _add_column    bwfmetaedit Core IPRD
-    _add_column    bwfmetaedit Core ISBJ
-    _add_column    bwfmetaedit Core ISFT
-    _add_column    bwfmetaedit Core ISRC
-    _add_column    bwfmetaedit Core ISRF
-    _add_column    bwfmetaedit Core ITCH
+    _add_column    bwfmetaedit Tech File/Technical/Information
+    _add_column    bwfmetaedit Core File/Core/Description
+    _add_column    bwfmetaedit Core File/Core/Originator
+    _add_column    bwfmetaedit Core File/Core/OriginatorReference
+    _add_column    bwfmetaedit Core File/Core/OriginationDate
+    _add_column    bwfmetaedit Core File/Core/OriginationTime
+    _add_column    bwfmetaedit Core File/Core/TimeReference_translated
+    _add_column    bwfmetaedit Core File/Core/TimeReference
+    _add_column    bwfmetaedit Core File/Core/BextVersion
+    _add_column    bwfmetaedit Core File/Core/UMID
+    _add_column    bwfmetaedit Core File/Core/LoudnessValue
+    _add_column    bwfmetaedit Core File/Core/LoudnessRange
+    _add_column    bwfmetaedit Core File/Core/MaxTruePeakLevel
+    _add_column    bwfmetaedit Core File/Core/MaxMomentaryLoudness
+    _add_column    bwfmetaedit Core File/Core/MaxShortTermLoudness
+    _add_column    bwfmetaedit Core File/Core/CodingHistory
+    _add_column    bwfmetaedit Core File/Core/IARL
+    _add_column    bwfmetaedit Core File/Core/IART
+    _add_column    bwfmetaedit Core File/Core/ICMS
+    _add_column    bwfmetaedit Core File/Core/ICMT
+    _add_column    bwfmetaedit Core File/Core/ICOP
+    _add_column    bwfmetaedit Core File/Core/ICRD
+    _add_column    bwfmetaedit Core File/Core/IENG
+    _add_column    bwfmetaedit Core File/Core/IGNR
+    _add_column    bwfmetaedit Core File/Core/IKEY
+    _add_column    bwfmetaedit Core File/Core/IMED
+    _add_column    bwfmetaedit Core File/Core/INAM
+    _add_column    bwfmetaedit Core File/Core/IPRD
+    _add_column    bwfmetaedit Core File/Core/ISBJ
+    _add_column    bwfmetaedit Core File/Core/ISFT
+    _add_column    bwfmetaedit Core File/Core/ISRC
+    _add_column    bwfmetaedit Core File/Core/ISRF
+    _add_column    bwfmetaedit Core File/Core/ITCH
 }
 
 _make_astats_csv_body(){
@@ -518,8 +545,8 @@ _make_graph(){
     while getopts "o:" opt ; do
         case "${opt}" in
             o) OUTPUT_DIR="${OPTARG}" ;;
-            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
             :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+            *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
         esac
     done
     shift "$((OPTIND-1))"
@@ -529,8 +556,6 @@ _make_graph(){
         OUTPUT_DIR="$(dirname "${FILENAME}")"
     fi
     BASENAME=$(basename "${FILENAME}")
-    OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.png"
-    _report -d "    Generating a graph at ${OUTPUT_GRAPH}"
     # image settings
     AUDIO_SAMPLE_RATE=48000
     HEADER_HEIGHT=24
@@ -540,18 +565,53 @@ _make_graph(){
     BORDER_COLOR="LightGrey"
     HORIZONTAL_MARKINGS_240="drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:height=ih/16,drawgrid=thickness=1:color=${BORDER_COLOR}@0.5:height=ih/4,drawgrid=thickness=1:color=${BORDER_COLOR}@0.8:height=ih/2"
     GRAPH_W=6000
+    if [[ -n "${GRAPH_MINUTES_SET}" ]] ; then
+        AUDIO_SAMPLE_RATE="${SAMPLE_RATE}"
+        AUDIO_FRAME_SIZE="$(printf "%.0f" $(echo "scale=2;((${GRAPH_MINUTES_SET}*60*${SAMPLE_RATE})/${GRAPH_W})+0.5" | bc))"
+    else
+        AUDIO_SAMPLE_RATE=48000
     AUDIO_FRAME_SIZE="$(echo "((${DURATION}*${AUDIO_SAMPLE_RATE})/${GRAPH_W})+1" | bc)"
+    fi
     # adding 0.5 in the above equation to ensure that the result is rounded to the nearest integer, rather than simply rounded down
     AUDIOFORMAT="aresample=${AUDIO_SAMPLE_RATE},aformat=sample_fmts=dbl,asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
     VERTICAL_MARKINGS=$(echo "${GRAPH_W} / 150" | bc)
     GRAPH_H="576"
     PAD_W="240"
 
+    _make_a_graph(){
+        OPTIND=1
+        unset GRAPH_START GRAPH_DURATION
+        while getopts "s:d:" opt ; do
+            case "${opt}" in
+                s) GRAPH_START="${OPTARG}" ;;
+                d) GRAPH_DURATION="${OPTARG}" ;;
+                :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+                *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            esac
+        done
+        INPUT_OPTS=(-nostdin)
+        INPUT_OPTS+=(-y)
+        INPUT_OPTS_ADDONS=("${1}")
+        if [[ -n "${GRAPH_START}" ]] ; then
+            INPUT_OPTS+=(-ss "${GRAPH_START}:00")
+        fi
+        if [[ -n "${GRAPH_DURATION}" ]] ; then
+            INPUT_OPTS+=(-t "${GRAPH_DURATION}:00")
+        fi
     unset TIMELINE
     COUNTER=0
     while [ "${COUNTER}" -lt "${VERTICAL_MARKINGS}" ]; do
         ((COUNTER++))
-        MARK="$(echo "scale=6; $DURATION * ($COUNTER / $VERTICAL_MARKINGS)" | bc)"
+        if [[ -z "${GRAPH_START}" ]] ; then
+            GRAPH_START="0"
+        fi
+        if [[ -n "${GRAPH_DURATION}" ]] ; then
+            PLOT_DURATION="$(echo "${GRAPH_DURATION} * 60" | bc)"
+            GRAPH_PART=" Graph #${SEGMENT_NUMBER} Starting at ${GRAPH_START}\:00"
+        else
+            PLOT_DURATION="${DURATION}"
+        fi
+        MARK="$(echo "scale=6; (${PLOT_DURATION} * ($COUNTER / $VERTICAL_MARKINGS)) + (${GRAPH_START} * 60)" | bc)"
         MARK_X="$(echo "scale=6; $GRAPH_W * ($COUNTER / $VERTICAL_MARKINGS)" | bc)"
         MARK_TIME="$(_ss_to_hhmmss "${MARK}")"
         TIMELINE+=",drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:text='${MARK_TIME}':x=${MARK_X}-text_w:y=(${HEADER_HEIGHT}-${TIMELINE_FONTSIZE})/2"
@@ -559,7 +619,7 @@ _make_graph(){
     GRAPH_FILTER="asplit=3[j][k][l];
         `#timeline`
         color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT}${TIMELINE},split=7[top1][top2][top3][top4][top5][top6][top7];
-        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size Displayed\: ${AUDIO_FRAME_SIZE}'[Header];
+        color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT_BIG},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=36:text='Audio QC Graph\:   Filename\: ${BASENAME},   Duration\: $(_ss_to_hhmmss "${DURATION}"),   Audio Frame Size Displayed\: ${AUDIO_FRAME_SIZE}  ${GRAPH_PART}'[Header];
         `#peak/rms left`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 1 Level, -144 to 0 dBFS, Blue=peak, Yellow=RMS'[peakLH];
         `#peak/rms right`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Channel 2 Level, -144 to 0 dBFS, Purple=peak, Yellow=RMS'[peakRH];
         `#min/max`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Audio Min/Max Level -1...1. Blue=channel 1, Purple=channel 2.'[minmaxH];
@@ -629,8 +689,25 @@ _make_graph(){
         [top6G][dcoffHG][dcoff1G]
         [top7G]vstack=20[grat];
         [grat][graph]hstack=2[chart]"
-    ffmpeg "${FFMPEG_VERBOSE[@]}" -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
-        -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
+
+        _report -d "    Generating a graph at ${OUTPUT_GRAPH} with ${INPUT_OPTS[*]}"
+        ffmpeg "${FFMPEG_VERBOSE[@]}" "${INPUT_OPTS[@]}" -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
+            -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
+    }
+    if [[ -n "${GRAPH_MINUTES_SET}" ]] ; then
+        SEGMENT_NUMBER=1
+        STARTING_MIN=0
+        DURATION_MIN="$(printf "%.0f" "$(echo "(${DURATION} / 60) + 0.5" | bc)")"
+        while [[ "${STARTING_MIN}" -lt "${DURATION_MIN}" ]] ; do
+            OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.${SEGMENT_NUMBER}.png"
+            _make_a_graph -s "${STARTING_MIN}" -d "${GRAPH_MINUTES_SET}"
+            SEGMENT_NUMBER=$((SEGMENT_NUMBER+1))
+            STARTING_MIN=$((STARTING_MIN+GRAPH_MINUTES_SET))
+        done
+    else
+        OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.png"
+        _make_a_graph "${SEGMENTING_RULES[@]}"
+    fi
 }
 
 _process_file(){
@@ -655,6 +732,7 @@ _process_file(){
     _report -d "Processing: ${BASENAME}"
     if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
+        SAMPLE_RATE=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.[0-9].sample_rate)
     fi
     if [[ ! -d "${OUTPUT_DIR}" ]] ; then
         mkdir -p "${OUTPUT_DIR}"
@@ -674,13 +752,15 @@ _process_file(){
         _report -d "    Adding metadata to the file summary csv"
         _get_csv_row "${FILENAME}"
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
-            echo "${CSV_HEADER}" | sed 's/.$//' > "${OUTPUT_CSV}"
+            echo "${CSV_HEADER}" | sed 's/,$//' > "${OUTPUT_CSV}"
         fi
-        echo "${CSV_ROW}" | sed 's/.$//' >> "${OUTPUT_CSV}"
+        echo "${CSV_ROW}" | sed 's/,$//' >> "${OUTPUT_CSV}"
     fi
     if [[ "${GRAPH_OUTPUT}" = "y" ]] ; then
         # variables to keep
         DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
+        SAMPLE_RATE=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.[0-9].sample_rate)
+        DURATION_TS=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" stream.duration_ts)
         _make_graph -o "${OUTPUT_DIR}" "${FILENAME}"
     fi
     if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
@@ -719,7 +799,9 @@ if [[ -f "${INPUT}" && "${INPUT_EXT}" != "txt" ]] ; then
             else
                 _process_file "${INPUT}"
             fi
-            _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
+            if [[ "${XML_OUTPUT}" = "y" ]] ; then
+                _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
+            fi
             ((FILE_NUMBER++))
         else
             _report -d "Skipping: ${INPUT} (no audio stream found)"
