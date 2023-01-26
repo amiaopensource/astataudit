@@ -57,6 +57,7 @@ CSV_FRAMES_OUTPUT="y"
 XML_OUTPUT="y"
 GRAPH_OUTPUT="y"
 FULL_DATA="n"
+SAMPLES_PER_ASTATS_CSV="65536"
 while getopts "hvc:f:x:g:o:Xm:" opt ; do
     case "${opt}" in
         h) _usage ; exit ;;
@@ -328,7 +329,7 @@ _get_metadata(){
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
     if [[ "${XML_OUTPUT}" = "y" || "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
-        ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=65536:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+        ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
         {
             echo "<astats>"
             grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
@@ -362,6 +363,8 @@ _get_csv_row(){
     dynamic_range_ch_offset="$(_get_astats_2channel_offset "Dynamic range")"
     noise_floor_db_ch_offset="$(_get_astats_2channel_offset "Noise floor dB")"
     noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
+    NOISE_FLOOR_1_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "1" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
+    NOISE_FLOOR_2_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "2" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
@@ -430,7 +433,9 @@ _get_csv_row(){
     _add_column -f -H astats  Overall "Noise floor dB"
     _add_column -H local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
     _add_column    astats  1       "Noise floor count"
+    _add_column    local   ""      "Noise_floor_duration_1" "${NOISE_FLOOR_1_DURATION}"
     _add_column    astats  2       "Noise floor count"
+    _add_column    local   ""      "Noise_floor_duration_2" "${NOISE_FLOOR_2_DURATION}"
     _add_column -f astats  Overall "Noise floor count"
     _add_column    local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
     _add_column    astats  1       "Max difference"
@@ -727,6 +732,7 @@ _process_file(){
     _report -d "Processing: ${BASENAME}"
     if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
+        SAMPLE_RATE=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.[0-9].sample_rate)
     fi
     if [[ ! -d "${OUTPUT_DIR}" ]] ; then
         mkdir -p "${OUTPUT_DIR}"
