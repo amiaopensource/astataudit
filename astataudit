@@ -35,6 +35,9 @@ Options:
  -x (y|n)  (Enable xml output, default 'y')
  -g (y|n)  (Enable graph output, default 'y')
 
+ -m MIN    (if MIN is set, then the graph output will be in one image for each set of specified
+           minutes of the timeline, otherwise the output will be in one image)
+
  -o DIR    (Send output files to the specified directory. Default is a directory next to the input.)
 
  -X        (By default the file summary csv will contain a core set of
@@ -54,7 +57,7 @@ CSV_FRAMES_OUTPUT="y"
 XML_OUTPUT="y"
 GRAPH_OUTPUT="y"
 FULL_DATA="n"
-while getopts "hvc:f:x:g:o:X" opt ; do
+while getopts "hvc:f:x:g:o:Xm:" opt ; do
     case "${opt}" in
         h) _usage ; exit ;;
         v) VERBOSE=true ;;
@@ -64,6 +67,7 @@ while getopts "hvc:f:x:g:o:X" opt ; do
         g) GRAPH_OUTPUT="${OPTARG}" ;;
         o) SET_OUTPUT_DIR="${OPTARG}" ;;
         X) FULL_DATA="y" ;;
+        m) GRAPH_MINUTES_SET="${OPTARG}" ;;
         :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
         *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
     esac
@@ -547,8 +551,6 @@ _make_graph(){
         OUTPUT_DIR="$(dirname "${FILENAME}")"
     fi
     BASENAME=$(basename "${FILENAME}")
-    OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.png"
-    _report -d "    Generating a graph at ${OUTPUT_GRAPH}"
     # image settings
     AUDIO_SAMPLE_RATE=48000
     HEADER_HEIGHT=24
@@ -558,18 +560,53 @@ _make_graph(){
     BORDER_COLOR="LightGrey"
     HORIZONTAL_MARKINGS_240="drawgrid=thickness=1:color=${BORDER_COLOR}@0.2:height=ih/16,drawgrid=thickness=1:color=${BORDER_COLOR}@0.5:height=ih/4,drawgrid=thickness=1:color=${BORDER_COLOR}@0.8:height=ih/2"
     GRAPH_W=6000
+    if [[ -n "${GRAPH_MINUTES_SET}" ]] ; then
+        AUDIO_SAMPLE_RATE="${SAMPLE_RATE}"
+        AUDIO_FRAME_SIZE="$(printf "%.0f" $(echo "scale=2;((${GRAPH_MINUTES_SET}*60*${SAMPLE_RATE})/${GRAPH_W})+0.5" | bc))"
+    else
+        AUDIO_SAMPLE_RATE=48000
     AUDIO_FRAME_SIZE="$(echo "((${DURATION}*${AUDIO_SAMPLE_RATE})/${GRAPH_W})+1" | bc)"
+    fi
     # adding 0.5 in the above equation to ensure that the result is rounded to the nearest integer, rather than simply rounded down
     AUDIOFORMAT="aresample=${AUDIO_SAMPLE_RATE},aformat=sample_fmts=dbl,asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
     VERTICAL_MARKINGS=$(echo "${GRAPH_W} / 150" | bc)
     GRAPH_H="576"
     PAD_W="240"
 
+    _make_a_graph(){
+        OPTIND=1
+        unset GRAPH_START GRAPH_DURATION
+        while getopts "s:d:" opt ; do
+            case "${opt}" in
+                s) GRAPH_START="${OPTARG}" ;;
+                d) GRAPH_DURATION="${OPTARG}" ;;
+                :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
+                *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
+            esac
+        done
+        INPUT_OPTS=(-nostdin)
+        INPUT_OPTS+=(-y)
+        INPUT_OPTS_ADDONS=("${1}")
+        if [[ -n "${GRAPH_START}" ]] ; then
+            INPUT_OPTS+=(-ss "${GRAPH_START}:00")
+        fi
+        if [[ -n "${GRAPH_DURATION}" ]] ; then
+            INPUT_OPTS+=(-t "${GRAPH_DURATION}:00")
+        fi
     unset TIMELINE
     COUNTER=0
     while [ "${COUNTER}" -lt "${VERTICAL_MARKINGS}" ]; do
         ((COUNTER++))
-        MARK="$(echo "scale=6; $DURATION * ($COUNTER / $VERTICAL_MARKINGS)" | bc)"
+        if [[ -z "${GRAPH_START}" ]] ; then
+            GRAPH_START="0"
+        fi
+        if [[ -n "${GRAPH_DURATION}" ]] ; then
+            echo 
+            PLOT_DURATION="$(echo "${GRAPH_DURATION} * 60" | bc)"
+        else
+            PLOT_DURATION="${DURATION}"
+        fi
+        MARK="$(echo "scale=6; (${PLOT_DURATION} * ($COUNTER / $VERTICAL_MARKINGS)) + (${GRAPH_START} * 60)" | bc)"
         MARK_X="$(echo "scale=6; $GRAPH_W * ($COUNTER / $VERTICAL_MARKINGS)" | bc)"
         MARK_TIME="$(_ss_to_hhmmss "${MARK}")"
         TIMELINE+=",drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:text='${MARK_TIME}':x=${MARK_X}-text_w:y=(${HEADER_HEIGHT}-${TIMELINE_FONTSIZE})/2"
@@ -647,8 +684,25 @@ _make_graph(){
         [top6G][dcoffHG][dcoff1G]
         [top7G]vstack=20[grat];
         [grat][graph]hstack=2[chart]"
-    ffmpeg "${FFMPEG_VERBOSE[@]}" -nostdin -y -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
-        -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
+
+        _report -d "    Generating a graph at ${OUTPUT_GRAPH} with ${INPUT_OPTS[*]}"
+        ffmpeg "${FFMPEG_VERBOSE[@]}" "${INPUT_OPTS[@]}" -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
+            -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
+    }
+    if [[ -n "${GRAPH_MINUTES_SET}" ]] ; then
+        SEGMENT_NUMBER=1
+        STARTING_MIN=0
+        DURATION_MIN="$(printf "%.0f" "$(echo "(${DURATION} / 60) + 0.5" | bc)")"
+        while [[ "${STARTING_MIN}" -lt "${DURATION_MIN}" ]] ; do
+            OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.${SEGMENT_NUMBER}.png"
+            _make_a_graph -s "${STARTING_MIN}" -d "${GRAPH_MINUTES_SET}"
+            SEGMENT_NUMBER=$((SEGMENT_NUMBER+1))
+            STARTING_MIN=$((STARTING_MIN+GRAPH_MINUTES_SET))
+        done
+    else
+        OUTPUT_GRAPH="${OUTPUT_DIR}/${BASENAME}.astatsaudit.png"
+        _make_a_graph "${SEGMENTING_RULES[@]}"
+    fi
 }
 
 _process_file(){
@@ -699,6 +753,8 @@ _process_file(){
     if [[ "${GRAPH_OUTPUT}" = "y" ]] ; then
         # variables to keep
         DURATION=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" format.duration)
+        SAMPLE_RATE=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" streams.stream.[0-9].sample_rate)
+        DURATION_TS=$(_flat_ffprobe_parse "${FFPROBE_REPORT}" stream.duration_ts)
         _make_graph -o "${OUTPUT_DIR}" "${FILENAME}"
     fi
     if [[ "${CSV_FRAMES_OUTPUT}" = "y" ]] ; then
