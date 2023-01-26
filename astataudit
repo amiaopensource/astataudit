@@ -601,7 +601,6 @@ _make_graph(){
             GRAPH_START="0"
         fi
         if [[ -n "${GRAPH_DURATION}" ]] ; then
-            echo 
             PLOT_DURATION="$(echo "${GRAPH_DURATION} * 60" | bc)"
         else
             PLOT_DURATION="${DURATION}"
