@@ -316,10 +316,22 @@ _report(){
 
 _ss_to_hhmmss(){
     # if milliseconds are used it will round down to nearest second for instance 60.9, will return 1:00
+    OPTIND=1
+    NO_SLASH="N"
+    while getopts "c" opt ; do
+        case "${opt}" in
+            c) NO_SLASH="Y" ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
     INT="${1%.*}"
     [[ -z "$INT" ]] && INT="0"
     DEC="$(echo "${1#*.}" | head -c 3)"
-    printf "%02d\:%02d\:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+    if [[ "${NO_SLASH}" == "Y" ]] ; then
+        printf "%02d:%02d:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+    else
+        printf "%02d\:%02d\:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+    fi
 }
 
 _get_metadata(){
@@ -434,9 +446,9 @@ _get_csv_row(){
     _add_column -f -H astats  Overall "Noise floor dB"
     _add_column -H local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
     _add_column -f astats  1       "Noise floor count"
-    _add_column    local   ""      "Noise_floor_duration_1" "$(_ss_to_hhmmss "${NOISE_FLOOR_1_DURATION}")"
+    _add_column    local   ""      "Noise_floor_duration_1" "$(_ss_to_hhmmss -c "${NOISE_FLOOR_1_DURATION}")"
     _add_column -f astats  2       "Noise floor count"
-    _add_column    local   ""      "Noise_floor_duration_2" "$(_ss_to_hhmmss "${NOISE_FLOOR_2_DURATION}")"
+    _add_column    local   ""      "Noise_floor_duration_2" "$(_ss_to_hhmmss -c "${NOISE_FLOOR_2_DURATION}")"
     _add_column -f astats  Overall "Noise floor count"
     _add_column -f local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
     _add_column    local   ""      "Noise floor duration offset" "${noise_floor_duration_ch_offset}"
