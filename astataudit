@@ -148,7 +148,7 @@ _add_column(){
         elif [[ "${ROUND}" == "Y" && -n "${CSV_VALUE}" ]] ; then
             CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f", $1}')"
         fi
-        CSV_VALUE="$(echo "${CSV_VALUE}" | sed 's|"|\\"|g')"
+        CSV_VALUE="$(echo "${CSV_VALUE}" | sed 's|"|""|g')"
         if [[ "$(echo "${CSV_VALUE}" | grep -c '$')" != 1 || "${CSV_VALUE}" == *","* ]] ; then
             CSV_VALUE="\"${CSV_VALUE}\""
         fi
