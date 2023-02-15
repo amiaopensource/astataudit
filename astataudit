@@ -148,7 +148,7 @@ _add_column(){
         elif [[ "${ROUND}" == "Y" && -n "${CSV_VALUE}" ]] ; then
             CSV_VALUE="$(echo "${CSV_VALUE}" | awk '{printf "%.2f", $1}')"
         fi
-        CSV_VALUE="$(echo "${CSV_VALUE}" | sed 's|"|\\"|g')"
+        CSV_VALUE="$(echo "${CSV_VALUE}" | sed 's|"|""|g')"
         if [[ "$(echo "${CSV_VALUE}" | grep -c '$')" != 1 || "${CSV_VALUE}" == *","* ]] ; then
             CSV_VALUE="\"${CSV_VALUE}\""
         fi
@@ -316,10 +316,22 @@ _report(){
 
 _ss_to_hhmmss(){
     # if milliseconds are used it will round down to nearest second for instance 60.9, will return 1:00
+    OPTIND=1
+    NO_SLASH="N"
+    while getopts "c" opt ; do
+        case "${opt}" in
+            c) NO_SLASH="Y" ;;
+        esac
+    done
+    shift "$((OPTIND-1))"
     INT="${1%.*}"
     [[ -z "$INT" ]] && INT="0"
     DEC="$(echo "${1#*.}" | head -c 3)"
-    printf "%02d\:%02d\:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+    if [[ "${NO_SLASH}" == "Y" ]] ; then
+        printf "%02d:%02d:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+    else
+        printf "%02d\:%02d\:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+    fi
 }
 
 _get_metadata(){
@@ -365,6 +377,7 @@ _get_csv_row(){
     noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
     NOISE_FLOOR_1_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "1" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
     NOISE_FLOOR_2_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "2" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
+    noise_floor_duration_ch_offset="$(echo "scale=3; ${NOISE_FLOOR_1_DURATION} - ${NOISE_FLOOR_2_DURATION}" | bc)"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
@@ -432,12 +445,13 @@ _get_csv_row(){
     _add_column -H astats  2       "Noise floor dB"
     _add_column -f -H astats  Overall "Noise floor dB"
     _add_column -H local   ""      "Noise floor dB offset" "${noise_floor_db_ch_offset}"
-    _add_column    astats  1       "Noise floor count"
-    _add_column    local   ""      "Noise_floor_duration_1" "${NOISE_FLOOR_1_DURATION}"
-    _add_column    astats  2       "Noise floor count"
-    _add_column    local   ""      "Noise_floor_duration_2" "${NOISE_FLOOR_2_DURATION}"
+    _add_column -f astats  1       "Noise floor count"
+    _add_column    local   ""      "Noise_floor_duration_1" "$(_ss_to_hhmmss -c "${NOISE_FLOOR_1_DURATION}")"
+    _add_column -f astats  2       "Noise floor count"
+    _add_column    local   ""      "Noise_floor_duration_2" "$(_ss_to_hhmmss -c "${NOISE_FLOOR_2_DURATION}")"
     _add_column -f astats  Overall "Noise floor count"
-    _add_column    local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
+    _add_column -f local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
+    _add_column    local   ""      "Noise floor duration offset" "$(_ss_to_hhmmss -c "${noise_floor_duration_ch_offset#-}")"
     _add_column    astats  1       "Max difference"
     _add_column    astats  2       "Max difference"
     _add_column -f astats  Overall "Max difference"
