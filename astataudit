@@ -365,6 +365,7 @@ _get_csv_row(){
     noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
     NOISE_FLOOR_1_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "1" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
     NOISE_FLOOR_2_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "2" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
+    noise_floor_duration_ch_offset="$(echo "scale=3; ${NOISE_FLOOR_1_DURATION} - ${NOISE_FLOOR_2_DURATION}" | bc)"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
@@ -438,6 +439,7 @@ _get_csv_row(){
     _add_column    local   ""      "Noise_floor_duration_2" "$(_ss_to_hhmmss "${NOISE_FLOOR_2_DURATION}")"
     _add_column -f astats  Overall "Noise floor count"
     _add_column -f local   ""      "Noise floor count offset" "${noise_floor_count_ch_offset}"
+    _add_column    local   ""      "Noise floor duration offset" "${noise_floor_duration_ch_offset}"
     _add_column    astats  1       "Max difference"
     _add_column    astats  2       "Max difference"
     _add_column -f astats  Overall "Max difference"
