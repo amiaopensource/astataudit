@@ -100,7 +100,7 @@ _add_column(){
     SECTION="${2}"
     KEY="${3}"
     VALUE="${4}"
-    if [[ "${FULL_DATA}" = "n" && "${IF_FULL}" = "n" ]] ; then
+    if [[ "${IF_FULL}" = "n" || ( "${FULL_DATA}" = "y" && "${IF_FULL}" = "y" ) ]] ; then
         if [[ "${FILE_NUMBER}" = "0" ]] ; then
             if [[ -n "${RELABEL}" ]] ; then
                 CSV_HEADER+="${RELABEL},"
