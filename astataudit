@@ -327,14 +327,14 @@ _ss_to_hhmmss(){
     if [[ "${1}" == "n/a" ]] ; then
         echo "${1}"
     else
-    INT="${1%.*}"
-    [[ -z "$INT" ]] && INT="0"
-    DEC="$(echo "${1#*.}" | head -c 3)"
-    if [[ "${NO_SLASH}" == "Y" ]] ; then
-        printf "%02d:%02d:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
-    else
-        printf "%02d\:%02d\:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
-    fi
+        INT="${1%.*}"
+        [[ -z "$INT" ]] && INT="0"
+        DEC="$(echo "${1#*.}" | head -c 3)"
+        if [[ "${NO_SLASH}" == "Y" ]] ; then
+            printf "%02d:%02d:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+        else
+            printf "%02d\:%02d\:%02d.${DEC}\n" $(($INT/3600)) $(($INT%3600/60)) $(($INT%60))
+        fi
     fi
 }
 
@@ -376,13 +376,13 @@ _get_csv_row(){
 
     #local math
     if [[ "${CHANNEL_COUNT}" -gt 1 ]] ; then 
-    RMS_level_ch_offset="$(_get_astats_2channel_offset "RMS level dB")"
-    dynamic_range_ch_offset="$(_get_astats_2channel_offset "Dynamic range")"
-    noise_floor_db_ch_offset="$(_get_astats_2channel_offset "Noise floor dB")"
-    noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
-    NOISE_FLOOR_1_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "1" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
-    NOISE_FLOOR_2_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "2" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
-    noise_floor_duration_ch_offset="$(echo "scale=3; ${NOISE_FLOOR_1_DURATION} - ${NOISE_FLOOR_2_DURATION}" | bc)"
+        RMS_level_ch_offset="$(_get_astats_2channel_offset "RMS level dB")"
+        dynamic_range_ch_offset="$(_get_astats_2channel_offset "Dynamic range")"
+        noise_floor_db_ch_offset="$(_get_astats_2channel_offset "Noise floor dB")"
+        noise_floor_count_ch_offset="$(_get_astats_2channel_offset "Noise floor count")"
+        NOISE_FLOOR_1_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "1" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
+        NOISE_FLOOR_2_DURATION="$(echo "scale=3; ${SAMPLES_PER_ASTATS_CSV} * $(_astats_parse "${FILTER_REPORT}" "2" "Noise floor count")/ ${SAMPLE_RATE}" | bc)"
+        noise_floor_duration_ch_offset="$(echo "scale=3; ${NOISE_FLOOR_1_DURATION} - ${NOISE_FLOOR_2_DURATION}" | bc)"
     else
         RMS_level_ch_offset="n/a"
         dynamic_range_ch_offset="n/a"
