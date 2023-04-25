@@ -154,6 +154,9 @@ _add_column(){
         fi
         CSV_ROW+="${CSV_VALUE},"
     fi
+    if [[ "$KEY" == "File/Core/IMED" ]] ; then
+        echo "${CSV_VALUE}|${FILENAME}" >> "${DUP_CHECK_TMP}"
+    fi
 }
 
 _check_dependencies(){
@@ -817,6 +820,7 @@ if [[ -f "${INPUT}" && "${INPUT_EXT}" != "txt" ]] ; then
     while [[ "${@}" != "" ]] ; do
         INPUT="$1"
         FILES_XML_TMP="$(_maketemp)"
+        DUP_CHECK_TMP="$(_maketemp)"
         if [[ -n "${SET_OUTPUT_DIR}" ]] ; then
             OUTPUT_XML="${SET_OUTPUT_DIR}/$(basename "${INPUT}").astatsaudit.xml"
         else
@@ -852,6 +856,7 @@ elif [[ -d "${INPUT}" || ( -f "${INPUT}" && "${INPUT_EXT}" == "txt" ) ]] ; then
         mkdir -p "${OUTPUT_DIR}"
     fi
     FILES_XML_TMP="$(_maketemp)"
+    DUP_CHECK_TMP="$(_maketemp)"
     OUTPUT_XML="${OUTPUT_DIR}/astatsaudit_${NOW}.xml"
     OUTPUT_CSV="${OUTPUT_DIR}/astatsaudit_${NOW}.csv"
     echo "<files>" > "${FILES_XML_TMP}"
@@ -879,5 +884,12 @@ elif [[ -d "${INPUT}" || ( -f "${INPUT}" && "${INPUT_EXT}" == "txt" ) ]] ; then
     echo "</files>" >> "${FILES_XML_TMP}"
     if [[ "${XML_OUTPUT}" = "y" ]] ; then
         _finish_xml "${FILES_XML_TMP}" > "${OUTPUT_XML}"
+    fi
+fi
+if [[ -f "${DUP_CHECK_TMP}" ]] ; then
+    DUP_IMED="$(sort -t '|' -k1 "${DUP_CHECK_TMP}" | awk -F'|' '$1 in first{print first[$1] $0; first[$1]=""; next} {first[$1]=$0 ORS}')"
+    if [[ "${DUP_IMED}" != "" ]] ; then
+        _report -w "Found some duplicate IMED values..."
+        echo "${DUP_IMED}"
     fi
 fi
