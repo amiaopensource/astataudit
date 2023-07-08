@@ -869,7 +869,7 @@ elif [[ -d "${INPUT}" || ( -f "${INPUT}" && "${INPUT_EXT}" == "txt" ) ]] ; then
             else
                 _report -d "Skipping: ${FILE} (no audio stream found)"
             fi
-        done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
+        done < <(find "${INPUT}" -type f ! -name ".*")
     else
         while read FILE ; do
             IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
