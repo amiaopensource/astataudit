@@ -658,7 +658,7 @@ _make_graph(){
         `#phase`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Correlation, -1 to 1'[phaseH];
         `#dc offset`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='DC Offset, -0.01 to 0.01 dBFS offset in the mean displacement from 0'[dcoffH];
         `#axcorrelate`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Normalized Cross Correlation, 1=highly correlated, 0=not correlated, -1=out of phase.'[axcH];
-        `#axcorrelate`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Audio frequency spectrum'[spectH];
+        `#spectrum`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Audio frequency spectrum'[spectH];
         [j]${AUDIOFORMAT},astats=metadata=1:reset=1,asplit=4[astats1][astats2][astats3][astats4];
             [astats1]adrawgraph=${DRAWGRAPH_SETTINGS}:
                 m1=lavfi.astats.1.Peak_level:fg1=0xFFE6D8AD:
