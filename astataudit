@@ -701,7 +701,7 @@ _make_graph(){
                 slide=picture:
                 s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[phase1];
         [m]${AUDIOFORMAT},aformat=cl=stereo,channelsplit,axcorrelate=size=1024:algo=slow,astats=metadata=1:reset=1,${AUDIOFORMAT},
-            adrawgraph=${DRAWGRAPH_SETTINGS}:m1=lavfi.astats.1.Max_level:fg1=0xFFE6D8AD:
+            adrawgraph=${DRAWGRAPH_SETTINGS}:m1=lavfi.astats.1.Max_level:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
             max=1.01:min=-1:slide=picture:mode=line:s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[axc1];
         [n]${AUDIOFORMAT},showspectrumpic=mode=separate:legend=0:s=${GRAPH_W}x${GRAPH_H}[spect1];
         [Header]
