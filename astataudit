@@ -40,8 +40,15 @@ Options:
 
  -o DIR    (Send output files to the specified directory. Default is a directory next to the input.)
 
+ -a OPTION (Specify an algorithm option for the axcorrelate filter. Options are 'fast', 'slow', and
+           (on recent versions of ffmpeg) a 'best' option is available. If not set, 'best' will be
+           used where avavilable, else 'slow' shall be used. Run 'ffmpeg -h filter=axcorrelate' to
+           see what options are available.)
+
  -X        (By default the file summary csv will contain a core set of
             metadata. The '-X' option adds more values.)
+
+ -F PATH   (provide a specific path to ffmpeg, ffprobe is expected to be in the same directory)
 
 EOF
 }
@@ -58,7 +65,7 @@ XML_OUTPUT="y"
 GRAPH_OUTPUT="y"
 FULL_DATA="n"
 SAMPLES_PER_ASTATS_CSV="65536"
-while getopts "hvc:f:x:g:o:Xm:" opt ; do
+while getopts "hvc:f:x:g:o:Xm:F:" opt ; do
     case "${opt}" in
         h) _usage ; exit ;;
         v) VERBOSE=true ;;
@@ -68,7 +75,9 @@ while getopts "hvc:f:x:g:o:Xm:" opt ; do
         g) GRAPH_OUTPUT="${OPTARG}" ;;
         o) SET_OUTPUT_DIR="${OPTARG}" ;;
         X) FULL_DATA="y" ;;
+        a) ALGO_OPT="${OPTARG}" ;;
         m) GRAPH_MINUTES_SET="${OPTARG}" ;;
+        F) FFMPEG_PATH="${OPTARG}" ;;
         :) echo "Option -${OPTARG} requires an argument" ; exit 1 ;;
         *) echo "bad option -${OPTARG}" ; _usage ; exit 1 ;;
     esac
@@ -348,14 +357,14 @@ _get_metadata(){
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
     if [[ "${XML_OUTPUT}" = "y" || "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
-        ffmpeg -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+        "${FFMPEG_PATH}" -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
         {
             echo "<astats>"
             grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
             echo "</astats>"
         } > "${FILTER_REPORT_XMLD}"
     fi
-    ffprobe -i "${FILENAME}" -show_format -show_streams -of flat 2> /dev/null > "${FFPROBE_REPORT}"
+    "${FFPROBE_PATH}" -i "${FILENAME}" -show_format -show_streams -of flat 2> /dev/null > "${FFPROBE_REPORT}"
     if [[ "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
         BWFMETAEDIT_REPORT=$(bwfmetaedit "$FILENAME" 2>&1 | awk '{printf "%s+",$0} END {print ""}')
         BWFMETAEDIT_TECH="$(bwfmetaedit --out-tech "$FILENAME")"
@@ -538,7 +547,7 @@ _get_csv_row(){
 _make_astats_csv_body(){
     FILENAME="${1}"
     ASTATS_CSV="${2}"
-    ffprobe -v 0 -f lavfi -i "amovie=${FILENAME},astats=metadata=1:reset=1" -show_frames -of csv >> "${ASTATS_CSV}"
+    "${FFPROBE_PATH}" -v 0 -f lavfi -i "amovie=${FILENAME},astats=metadata=1:reset=1" -show_frames -of csv >> "${ASTATS_CSV}"
 }
 
 _make_astats_csv(){
@@ -563,7 +572,7 @@ _make_astats_csv(){
     DURATION_LITTLE_LESS="$(echo "${DURATION}" - 0.1 | bc -l)"
     if [[ ! -f "${ASTATS_CSV}" ]] ; then
         _report -d "    Making astats csv for ${BASENAME}"
-        ffprobe -f lavfi -i "amovie=${FILENAME}:sp=${DURATION_LITTLE_LESS},astats=metadata=1:reset=1" -show_frames -of csv=nk=0 2>/dev/null | tail -n 1 | sed 's/=[^,]*//g' > "${ASTATS_CSV}"
+        "${FFPROBE_PATH}" -f lavfi -i "amovie=${FILENAME}:sp=${DURATION_LITTLE_LESS},astats=metadata=1:reset=1" -show_frames -of csv=nk=0 2>/dev/null | tail -n 1 | sed 's/=[^,]*//g' > "${ASTATS_CSV}"
         _make_astats_csv_body "${FILENAME}" "${ASTATS_CSV}"
     else
         _report -d "    Astats csv for ${BASENAME} already exists, skipping."
@@ -604,7 +613,7 @@ _make_graph(){
     AUDIO_FRAME_SIZE="$(echo "((${DURATION}*${AUDIO_SAMPLE_RATE})/${GRAPH_W})+1" | bc)"
     fi
     # adding 0.5 in the above equation to ensure that the result is rounded to the nearest integer, rather than simply rounded down
-    AUDIOFORMAT="aresample=${AUDIO_SAMPLE_RATE},aformat=sample_fmts=dbl,asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
+    AUDIOFORMAT="aformat=sample_fmts=dblp,sample_rates=${AUDIO_SAMPLE_RATE},asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
     VERTICAL_MARKINGS=$(echo "${GRAPH_W} / 150" | bc)
     GRAPH_H="576"
     PAD_W="240"
@@ -749,8 +758,13 @@ s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[phase1];")
 
     if [[ "${AXCORRELATE}" == "1" ]] ; then
         SPLIT_OUTPUTS+="[m]"
+        if [[ -n "${ALGO_OPT}" ]] ; then
+            ALGO_ARG=":algo=${ALGO_OPT}"
+        else
+            ALGO_ARG=""
+        fi
         GRAPH_HEADERS+=("`#axcorrelate`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Normalized Cross Correlation, 1=highly correlated, 0=not correlated, -1=out of phase.'[axcH];")
-        FILTERCHAINS+=("[m]${AUDIOFORMAT},aformat=cl=stereo,channelsplit,axcorrelate=size=1024:algo=slow,astats=metadata=1:reset=1,${AUDIOFORMAT},
+        FILTERCHAINS+=("[m]${AUDIOFORMAT},aformat=cl=stereo,channelsplit,axcorrelate=size=1024${ALGO_ARG},astats=metadata=1:reset=1,${AUDIOFORMAT},
 adrawgraph=${DRAWGRAPH_SETTINGS}:m1=lavfi.astats.1.Max_level:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
 max=1.01:min=-1:slide=picture:mode=line:s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[axc1];")
         GRATS+=("`#-1-1_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='0',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-0.5',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='+0.5',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2[axc1G];")
@@ -805,7 +819,7 @@ max=1.01:min=-1:slide=picture:mode=line:s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MAR
         [grat][graph]hstack=2[chart]"
 
         _report -d "    Generating a graph at ${OUTPUT_GRAPH} with ${INPUT_OPTS[*]}"
-        ffmpeg "${FFMPEG_VERBOSE[@]}" "${INPUT_OPTS[@]}" -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
+        "${FFMPEG_PATH}" "${FFMPEG_VERBOSE[@]}" "${INPUT_OPTS[@]}" -i "$FILENAME" -filter_complex "${GRAPH_FILTER}" \
             -map "[chart]" -vframes 1 "${OUTPUT_GRAPH}"
     }
     if [[ -n "${GRAPH_MINUTES_SET}" ]] ; then
@@ -843,7 +857,7 @@ _process_file(){
     BASENAME="$(basename "${FILENAME}")"
     unset CSV_ROW
     FILTER_TMP_XMLD="$(_maketemp)"
-    CHANNEL_COUNT="$(ffprobe -v 0 -i "${FILENAME}" -show_entries stream=channels -select_streams a:0 -of default=nk=1:nw=1)"
+    CHANNEL_COUNT="$("${FFPROBE_PATH}" -v 0 -i "${FILENAME}" -show_entries stream=channels -select_streams a:0 -of default=nk=1:nw=1)"
     _report -d "Processing: ${BASENAME}"
     if [[ "${CSV_SUMMARY_OUTPUT}" = "y" || "${XML_OUTPUT}" = "y" || "${GRAPH_OUTPUT}" = "y" ]] ; then
         _get_metadata "${FILENAME}" "${FILTER_TMP_XMLD}"
@@ -857,7 +871,7 @@ _process_file(){
         FFMPEG_TMP="${FILES_XML_TMP}.ff.${FILE_NUMBER}.xml"
         BWFME_TMP="${FILES_XML_TMP}.bwf.${FILE_NUMBER}.xml"
         echo "<f ff=\"${FFMPEG_TMP}\" bwf=\"${BWFME_TMP}\" astats=\"${FILTER_TMP_XMLD}\">$(echo "${FILENAME}" | sed 's/.*\/\|.*\///g')</f>" >> "${FILES_XML_TMP}"
-        FFPROBE_CMD=(ffprobe -v 0 "${FILENAME}" "${FFPROBE_SETTINGS[@]}")
+        FFPROBE_CMD=("${FFPROBE_PATH}" -v 0 "${FILENAME}" "${FFPROBE_SETTINGS[@]}")
         "${FFPROBE_CMD[@]}" > "${FFMPEG_TMP}"
         BWFME_CMD=(bwfmetaedit --out-core-xml="${BWFME_TMP}" "${FILENAME}")
         "${BWFME_CMD[@]}" 2>/dev/null
@@ -883,7 +897,21 @@ _process_file(){
     fi
 }
 
-_check_dependencies bwfmetaedit ffmpeg ffprobe bc xmlstarlet
+if [[ -x "${FFMPEG_PATH}" ]] ; then
+    FFPROBE_MAYBE="$(dirname "${FFMPEG_PATH}")/ffprobe"
+    if [[ -x "${FFPROBE_MAYBE}" ]] ; then
+        FFPROBE_PATH="${FFPROBE_MAYBE}"
+    else
+        FFPROBE_PATH="$(which ffprobe)"
+    fi
+else
+    FFMPEG_PATH="$(which ffmpeg)"
+    FFPROBE_PATH="$(which ffprobe)"
+fi
+_report -d "Will use the ffmpeg at ${FFMPEG_PATH}"
+_report -d "Will use the ffprobe at ${FFPROBE_PATH}"
+
+_check_dependencies bwfmetaedit "${FFMPEG_PATH}" "${FFPROBE_PATH}" bc xmlstarlet
 XMLSTARLET_PATH="$(which xmlstarlet)"
 _find_a_font
 
@@ -908,7 +936,7 @@ if [[ -f "${INPUT}" && "${INPUT_EXT}" != "txt" ]] ; then
         else
             OUTPUT_XML="${INPUT}.astatsaudit.xml"
         fi
-        IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${INPUT}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
+        IS_AUDIO="$("${FFPROBE_PATH}" "${FFMPEG_VERBOSE[@]}" -v 0 "${INPUT}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
         if [[ "${IS_AUDIO}" = "audio" ]] ; then
             if [[ -n "${SET_OUTPUT_DIR}" ]] ; then
                 _process_file -o "${SET_OUTPUT_DIR}" "${INPUT}"
@@ -944,7 +972,7 @@ elif [[ -d "${INPUT}" || ( -f "${INPUT}" && "${INPUT_EXT}" == "txt" ) ]] ; then
     echo "<files>" > "${FILES_XML_TMP}"
     if [[ -d "${INPUT}" ]] ; then
         while read FILE ; do
-            IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
+            IS_AUDIO="$("${FFPROBE_PATH}" "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
             if [[ "${IS_AUDIO}" = "audio" ]] ; then
                 _process_file -o "${OUTPUT_DIR}" "${FILE}"
                 ((FILE_NUMBER++))
@@ -954,7 +982,7 @@ elif [[ -d "${INPUT}" || ( -f "${INPUT}" && "${INPUT_EXT}" == "txt" ) ]] ; then
         done < <(find "${INPUT}" -maxdepth 1 -type f ! -name ".*")
     else
         while read FILE ; do
-            IS_AUDIO="$(ffprobe "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
+            IS_AUDIO="$("${FFPROBE_PATH}" "${FFMPEG_VERBOSE[@]}" -v 0 "${FILE}" -show_entries stream=codec_type -select_streams a:0 -of default=nk=1:nw=1)"
             if [[ "${IS_AUDIO}" = "audio" ]] ; then
                 _process_file -o "${OUTPUT_DIR}" "${FILE}"
                 ((FILE_NUMBER++))

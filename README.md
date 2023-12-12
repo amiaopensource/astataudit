@@ -24,6 +24,8 @@ astataudit has been tested with:
 
 ## install
 
+### overview
+
 On a Mac with homebrew: `brew install amiaopensource/amiaos/astataudit` and run like `astataudit -h`
 
 Else:
@@ -37,3 +39,15 @@ Else:
   - `cd /mnt/c/users/ben/Desktop/astataudit-main` or `cd C:\Users\ben\Desktop\astataudit-main`
 
 - run the script from here, such as `./astataudit -h`
+
+### using development build of ffmpeg
+
+Astataudit uses a prerelease feature of ffmpeg to run the [axcorrelate filter](https://ffmpeg.org/ffmpeg-filters.html#axcorrelate). If available, astataudit will use the 'best' algorithm option; however if this is unavailable astataudit will use the 'slow' option. To test if your ffmpeg supports the 'best' option, run `ffmpeg -h filter=axcorrelate` and see if 'best' is listed as an algorithm option. To test astataudit with a development build of ffmpeg, please folow these steps:
+
+- download [FFmpeg_Bin_Latest_Mac_Static_x64.zip]( https://old.mediaarea.net/download/snapshots/binary/ffmpeg/latest/FFmpeg_Bin_Latest_Mac_Static_x64.zip) from MediaArea.
+- unzip the download
+- Right click on the 'ffmpeg' and select 'Open'. The macOS should present a warning and ask for verification to use it: click 'Open' again.
+- Repeat the last step for ffprobe.
+- Add ' -F /path/to/your/downloaded/ffmpeg ' to your astataudit commands.
+
+Once ffmpeg 6.1 or later is supported by homebrew ([check here}](https://github.com/Homebrew/homebrew-core/blob/master/Formula/f/ffmpeg.rb)), the release should be preferred over a developmental build.
