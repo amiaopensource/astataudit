@@ -42,7 +42,7 @@ Else:
 
 ### using development build of ffmpeg
 
-Astataudit uses a prerelease feature of ffmpeg to run the [axcorrelate filter](https://ffmpeg.org/ffmpeg-filters.html#axcorrelate). If available, astataudit will use the 'best' algorithm option; however if this is unavailable astataudit will use the 'slow' option. To test if your ffmpeg supports the 'best' option, run `ffmpeg -h filter=axcorrelate` and see if 'best' is listed as an algorithm option. To test astataudit with a development build of ffmpeg, please folow these steps:
+Astataudit uses a prerelease feature of ffmpeg to run the [axcorrelate filter](https://ffmpeg.org/ffmpeg-filters.html#axcorrelate). If available, astataudit will use the 'best' algorithm option; however if this is unavailable astataudit will use the 'slow' option. To test if your ffmpeg supports the 'best' option, run `ffmpeg -h filter=axcorrelate` and see if 'best' is listed as an algorithm option. To test astataudit with a development build of ffmpeg, please follow these steps:
 
 - download [FFmpeg_Bin_Latest_Mac_Static_x64.zip]( https://old.mediaarea.net/download/snapshots/binary/ffmpeg/latest/FFmpeg_Bin_Latest_Mac_Static_x64.zip) from MediaArea.
 - unzip the download
