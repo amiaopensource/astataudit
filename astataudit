@@ -765,7 +765,7 @@ s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[phase1];")
         fi
         GRAPH_HEADERS+=("`#axcorrelate`color=c=${BORDER_COLOR}:s=${GRAPH_W}x${HEADER_HEIGHT},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=24:text='Normalized Cross Correlation, 1=highly correlated, 0=not correlated, -1=out of phase.'[axcH];")
         FILTERCHAINS+=("[m]${AUDIOFORMAT},aformat=cl=stereo,channelsplit,axcorrelate=size=1024${ALGO_ARG},astats=metadata=1:reset=1,${AUDIOFORMAT},
-adrawgraph=${DRAWGRAPH_SETTINGS}:m1=lavfi.astats.1.Max_level:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
+adrawgraph=${DRAWGRAPH_SETTINGS}:m1=lavfi.astats.1.DC_offset:fg1=if(gte(VAL\,0.9)\,0xFF00FF00\,if(gte(VAL\,0)\,0xFF00FFFF\,if(gte(VAL\,-0.5)\,0xFF0096FF\,0xFF0000FF))):
 max=1.01:min=-1:slide=picture:mode=line:s=${GRAPH_W}x${GRAPH_H},${HORIZONTAL_MARKINGS_240}[axc1];")
         GRATS+=("`#-1-1_240p_grat`color=c=${BORDER_COLOR}:s=${PAD_W}x${GRAPH_H},drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.52:x=w*0.7:text='0',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.77:x=w*0.7:text='-0.5',drawtext=fontfile=${FONT_FILE}:fontcolor=black:fontsize=${TIMELINE_FONTSIZE}:y=h*0.27:x=w*0.7:text='+0.5',drawgrid=thickness=1:color=black@0.2:height=ih/16,drawgrid=thickness=1:color=black@0.5:height=ih/4,drawgrid=thickness=1:color=black@0.8:height=ih/2[axc1G];")
         GRAPHSTACK+="[top6][axcH][axc1]"
