@@ -430,6 +430,7 @@ _get_csv_row(){
     _add_column -f -P astats  Overall "DC offset"
     _add_column -H -r "Correlation (via phase)"        astats  lavfi.aphasemeter.phase   "Correlation"
     _add_column -r "Avg Correlation (via axcorrelation)" astats  1       "DC offset"              "Parsed_astats_6"
+    _add_column -r "Min Correlation (via axcorrelation)" astats  1       "Min level"              "Parsed_astats_6"
     _add_column -f astats  1       "RMS difference"
     _add_column -f astats  2       "RMS difference"
     _add_column -f astats  Overall "RMS difference"
