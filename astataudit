@@ -613,7 +613,7 @@ _make_graph(){
     AUDIO_FRAME_SIZE="$(echo "((${DURATION}*${AUDIO_SAMPLE_RATE})/${GRAPH_W})+1" | bc)"
     fi
     # adding 0.5 in the above equation to ensure that the result is rounded to the nearest integer, rather than simply rounded down
-    AUDIOFORMAT="aformat=sample_fmts=dblp,sample_rates=${AUDIO_SAMPLE_RATE},asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
+    AUDIOFORMAT="aformat=sample_fmts=dblp:sample_rates=${AUDIO_SAMPLE_RATE},asetnsamples=n=${AUDIO_FRAME_SIZE}:p=0"
     VERTICAL_MARKINGS=$(echo "${GRAPH_W} / 150" | bc)
     GRAPH_H="576"
     PAD_W="240"
