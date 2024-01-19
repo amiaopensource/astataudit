@@ -357,7 +357,7 @@ _get_metadata(){
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
     if [[ "${XML_OUTPUT}" = "y" || "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
-        "${FFMPEG_PATH}" -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate=size=1024,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+        "${FFMPEG_PATH}" -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate=size=1024,astats,astats=metadata=1:reset=1,ametadata=mode=print:key=lavfi.astats.1.DC_offset" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
         {
             echo "<astats>"
             grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
@@ -404,6 +404,7 @@ _get_csv_row(){
         NOISE_FLOOR_2_DURATION="n/a"
         noise_floor_duration_ch_offset="n/a"
     fi
+    MIN_AXCORRELATE_DC_OFFSET="$(grep lavfi.astats.1.DC_offset "${FILTER_REPORT}" | cut -d = -f2 | sort -n | head -n 1)"
 
     # the following _add_column functions use the following arguments
     # 1: 'astats to read from FILTER_REPORT
@@ -431,6 +432,7 @@ _get_csv_row(){
     _add_column -H -r "Correlation (via phase)"        astats  lavfi.aphasemeter.phase   "Correlation"
     _add_column -r "Avg Correlation (via axcorrelation)" astats  1       "DC offset"              "Parsed_astats_6"
     _add_column -r "Min Correlation (via axcorrelation)" astats  1       "Min level"              "Parsed_astats_6"
+    _add_column    local   ""      "Min Correlated DC Offset" "${MIN_AXCORRELATE_DC_OFFSET}"
     _add_column -f astats  1       "RMS difference"
     _add_column -f astats  2       "RMS difference"
     _add_column -f astats  Overall "RMS difference"
