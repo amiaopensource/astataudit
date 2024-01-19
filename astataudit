@@ -357,7 +357,7 @@ _get_metadata(){
     FILTER_REPORT_XMLD="${2}"
     FFPROBE_REPORT="$(_maketemp)"
     if [[ "${XML_OUTPUT}" = "y" || "${CSV_SUMMARY_OUTPUT}" = "y" ]] ; then
-        "${FFMPEG_PATH}" -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
+        "${FFMPEG_PATH}" -nostdin -i "${FILENAME}" -vn -filter_complex "astats,asetnsamples=n=${SAMPLES_PER_ASTATS_CSV}:p=0,aphasemeter=video=0,ametadata=mode=print:key=lavfi.aphasemeter.phase,channelsplit,axcorrelate=size=1024,astats" -f null - 2>&1 |  tr "\r" "\n" > "${FILTER_REPORT}"
         {
             echo "<astats>"
             grep "Parsed_astats" "${FILTER_REPORT}" | cut -d "]" -f2- | sed 's/^ //g'
